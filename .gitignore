@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+backend/venv/
+venv/
+__pycache__/
+*.pyc
+
+# Environment files
+.env
+.env.*
+
+# Databases
+*.sqlite3
+*.db
+backend/skillvoice.db
+
+# Build outputs
+frontend/dist/
+frontend/build/
+dist/
+
+# OS/Editor specific
+.DS_Store
+.vscode/
+.idea/
+*.log
