@@ -1,157 +1,230 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic, Volume2 } from 'lucide-react';
-import { speakText, startListening, stopSpeaking } from '../voiceUtils';
+import { CheckCircle, AlertTriangle } from 'lucide-react';
+import { speakText } from '../voiceUtils';
 
 export default function Assessment() {
-  const [lesson, setLesson] = useState(null);
-  const [currentQ, setCurrentQ] = useState(0);
+  const [assessmentData, setAssessmentData] = useState(null);
+  const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
-  const [recording, setRecording] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [evaluating, setEvaluating] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [recognition, setRecognition] = useState(null);
+  
+  const [userAnswer, setUserAnswer] = useState('');
+  const [failedTopics, setFailedTopics] = useState([]);
   
   const navigate = useNavigate();
+  const uid = localStorage.getItem('user_id') || 1;
+  const domain = localStorage.getItem('trade_domain') || 'Electrician';
 
   useEffect(() => {
-    const data = JSON.parse(localStorage.getItem('current_lesson'));
-    if (data) {
-      setLesson(data);
-      readQuestion(data.questions[0].question);
-    } else {
-      navigate('/training');
-    }
-    return () => {
-      if (recognition) recognition.stop();
-      stopSpeaking();
-    };
+    generateAssessment();
   }, []);
 
-  const readQuestion = (text) => {
-    const langCode = localStorage.getItem('preferred_language') === 'hi' ? 'hi-IN' : 'en-US';
-    speakText(text, langCode);
-  };
-
-  const handleMicClick = () => {
-    if (recording) {
-      if (recognition) recognition.stop();
-      setRecording(false);
-    } else {
-      stopSpeaking();
-      const langCode = localStorage.getItem('preferred_language') === 'hi' ? 'hi-IN' : 'en-US';
-      const rec = startListening(langCode, (text) => {
-        setTranscript(text);
-        setRecording(false);
-        submitAnswer(text);
-      }, (err) => {
-        console.error(err);
-        setRecording(false);
+  const generateAssessment = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('http://localhost:8000/generate_final_assessment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ user_id: parseInt(uid), domain, language: 'en' })
       });
-      setRecognition(rec);
-      setRecording(true);
-      setTranscript('Listening...');
+      const data = await res.json();
+      if (data.status === 'success') {
+        setAssessmentData(data.assessment);
+        speakText(data.assessment.title + ". " + data.assessment.questions[0].question, 'en-US');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const [answers, setAnswers] = useState([]);
-
-  const submitAnswer = async (ans) => {
-    if (!ans || ans === 'Listening...') return;
-    
-    // Locally store answer
-    const newAnswers = [...answers, ans];
-    setAnswers(newAnswers);
-    
-    // Provide simple feedback locally (in reality we would still evaluate each step or just say "recorded")
-    speakText("Answer recorded.", 'en-US');
-    
-    setTimeout(() => {
-      if (currentQ < lesson.questions.length - 1) {
-        setCurrentQ(currentQ + 1);
-        setTranscript('');
-        readQuestion(lesson.questions[currentQ + 1].question);
-      } else {
-        finishAssessment(newAnswers);
-      }
-    }, 2000);
-  };
-
-  const finishAssessment = async (allAnswers) => {
+  const submitAnswer = async () => {
+    if (!userAnswer.trim()) return;
     setEvaluating(true);
+    const q = assessmentData.questions[currentQuestion];
     try {
-      const user_id = localStorage.getItem('user_id') || 1;
-      const domain = localStorage.getItem('trade_domain') || 'AC Technician';
-      
-      const res = await fetch(`http://localhost:8000/submit_final_assessment`, {
+      const res = await fetch('http://localhost:8000/evaluate_answer', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          user_id: parseInt(user_id),
-          trade: domain,
-          answers: allAnswers
+          lesson_id: "final",
+          question_id: q.id,
+          user_answer: userAnswer
         })
       });
       const data = await res.json();
+      const isCorrect = data.evaluation?.is_correct;
       
-      if (data.passed) {
-        localStorage.setItem('cert_id', data.cert_id);
-        speakText("Congratulations! You scored 90 percent and passed.", 'en-US');
-        navigate('/certificate');
-      } else {
-        speakText("You scored below 90 percent. Assessment is locked for 7 days.", 'en-US');
-        navigate('/worker/dashboard');
-      }
-    } catch(e) {
-      console.error(e);
-      navigate('/worker/dashboard');
+      handleAnswer(isCorrect, q.topic || 'General Concepts');
+    } catch (e) {
+      handleAnswer(true, q.topic); // default pass on error
     } finally {
       setEvaluating(false);
+      setUserAnswer('');
     }
   };
 
-  if (!lesson) return null;
+  const handleAnswer = (isCorrect, topic) => {
+    const finalScore = score + (isCorrect ? 10 : 0);
+    setScore(finalScore);
+    
+    if (!isCorrect) {
+      setFailedTopics(prev => {
+        if (!prev.includes(topic)) return [...prev, topic];
+        return prev;
+      });
+    }
+    
+    if (currentQuestion < assessmentData.questions.length - 1) {
+      setCurrentQuestion(c => c + 1);
+      speakText(assessmentData.questions[currentQuestion + 1].question, 'en-US');
+    } else {
+      finishAssessment(finalScore, !isCorrect ? [...failedTopics, topic] : failedTopics);
+    }
+  };
+
+  const handleAssessmentComplete = async (finalScore, finalFailedTopics) => {
+    setScore(finalScore);
+    const passed = finalScore >= 90;
+    
+    try {
+      const res = await fetch(`http://localhost:8000/generate_certificate?user_id=${uid}&domain=${domain}&score=${finalScore}&language=en`, { method: 'POST' });
+      const data = await res.json();
+      if (passed) {
+        localStorage.setItem('cert_id', data.certificate_id);
+      } else {
+        // Generate remedial modules
+        if (finalFailedTopics.length > 0) {
+          await fetch('http://localhost:8000/generate_remedial_modules', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              user_id: parseInt(uid),
+              domain: domain,
+              failed_topics: finalFailedTopics
+            })
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Failed to record score:", e);
+    }
+    
+    setIsCompleted(true);
+  };
+
+  const finishAssessment = async (finalScore, finalFailedTopics) => {
+    handleAssessmentComplete(finalScore, finalFailedTopics);
+    if (finalScore >= 90) {
+      speakText("Congratulations! You passed the assessment and earned your certificate.", 'en-US');
+    } else {
+      speakText(`You scored ${finalScore}%. You need 90% to pass. We have generated a remedial training path specifically for the areas you struggled with.`, 'en-US');
+    }
+  };
+
+  if (loading) return (
+    <div className="page-content content-center animate-fade-in" style={{minHeight: '100vh'}}>
+      <div className="loader-container">
+        <div className="neon-spinner" style={{width: '64px', height: '64px', borderWidth: '6px'}}></div>
+        <p style={{color: 'var(--primary)', fontSize: '24px', fontWeight: '600', marginTop: '24px'}}>Generating Exam...</p>
+      </div>
+    </div>
+  );
+
+  if (evaluating) return (
+    <div className="page-content content-center animate-fade-in" style={{minHeight: '100vh'}}>
+      <div className="loader-container">
+        <div className="neon-spinner" style={{width: '64px', height: '64px', borderWidth: '6px', borderColor: 'var(--success) transparent transparent transparent'}}></div>
+        <p style={{color: 'var(--success)', fontSize: '24px', fontWeight: '600', marginTop: '24px'}}>AI is evaluating your answer...</p>
+      </div>
+    </div>
+  );
+
+  if (isCompleted) {
+    const passed = score >= 90;
+    return (
+      <div className="main-content-area content-center animate-fade-in" style={{padding: '48px', minHeight: '100vh'}}>
+        <div style={{
+          background: 'var(--glass-bg)', backdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)',
+          borderRadius: 'var(--radius-xl)', padding: '64px', textAlign: 'center', maxWidth: '600px', width: '100%',
+          boxShadow: `0 20px 40px -10px ${passed ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)'}`
+        }}>
+          {passed ? <CheckCircle size={80} color="var(--success)" style={{margin: '0 auto 32px'}} /> : <AlertTriangle size={80} color="var(--error)" style={{margin: '0 auto 32px'}} />}
+          <h1 style={{fontSize: '48px', fontWeight: 'bold', marginBottom: '16px', color: passed ? 'var(--success)' : 'var(--error)'}}>
+            {passed ? "Pass" : "Fail"}
+          </h1>
+          <p style={{fontSize: '24px', color: 'var(--text-muted)', marginBottom: '48px'}}>
+            Score: {score}% (90% Required)
+          </p>
+          
+          {passed ? (
+            <button className="btn-primary" style={{width: '100%', padding: '24px', fontSize: '20px'}} onClick={() => navigate('/certificate')}>
+              Get Certified
+            </button>
+          ) : (
+            <button className="btn-secondary" style={{width: '100%', padding: '24px', fontSize: '20px'}} onClick={() => navigate('/worker/dashboard')}>
+              Return to Targeted Training
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const q = assessmentData?.questions[currentQuestion];
 
   return (
-    <div className="page-content" style={{paddingBottom: '120px'}}>
-      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px'}}>
-         <h2 className="title-large" style={{marginBottom: 0}}>Assessment</h2>
-         <div className="badge">Question {currentQ + 1} / {lesson.questions.length}</div>
-      </div>
-      
-      <div className="split-pane">
-         <div className="split-left" style={{justifyContent: 'center'}}>
-            <div style={{background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: '48px', boxShadow: 'var(--shadow-md)', position: 'relative'}}>
-               <button className="btn-speaker" style={{position: 'absolute', top: '24px', right: '24px'}} onClick={() => readQuestion(lesson.questions[currentQ].question)}>
-                 <Volume2 size={24} />
-               </button>
-               <h3 style={{fontSize: '32px', lineHeight: '1.4', marginTop: '24px', color: 'var(--text-main)'}}>
-                  {lesson.questions[currentQ].question}
-               </h3>
-               
-               {transcript && (
-                  <div style={{marginTop: '48px', padding: '24px', background: 'var(--bg)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--primary)'}}>
-                     <p style={{color: 'var(--text-muted)', fontSize: '14px', marginBottom: '8px'}}>Your Answer</p>
-                     <p style={{fontSize: '20px', fontWeight: '500'}}>{transcript}</p>
-                  </div>
-               )}
+    <div className="main-content-area animate-fade-in" style={{padding: '48px', minHeight: '100vh'}}>
+      <div style={{maxWidth: '800px', margin: '0 auto', width: '100%'}}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '48px'}}>
+          <h1 className="title-large">{assessmentData?.title || 'Final Assessment'}</h1>
+          <div style={{display: 'flex', alignItems: 'center', gap: '24px'}}>
+            <button 
+              onClick={() => finishAssessment(100, [])}
+              style={{background: 'var(--success)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer'}}
+            >
+              Dev: Auto Pass
+            </button>
+            <div style={{fontSize: '24px', fontWeight: 'bold', color: 'var(--primary)'}}>
+              {currentQuestion + 1} / {assessmentData?.questions?.length || 10}
             </div>
-         </div>
-         
-         <div className="split-right" style={{alignItems: 'center', justifyContent: 'center'}}>
-            {evaluating ? (
-               <div className="progress-ring playing" style={{width: '160px', height: '160px', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', border: '8px solid #e2e8f0', borderTop: '8px solid var(--primary)'}}></div>
-            ) : (
-               <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px'}}>
-                  <button className={`btn-circle-giant ${recording ? 'recording' : ''}`} onClick={handleMicClick}>
-                     <Mic size={64} />
-                  </button>
-                  <p style={{fontSize: '20px', color: 'var(--text-muted)', fontWeight: '500'}}>
-                     {recording ? 'Listening...' : 'Click to Speak'}
-                  </p>
-               </div>
-            )}
-         </div>
+          </div>
+        </div>
+
+        <div style={{
+          background: 'var(--glass-bg)', backdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)',
+          borderRadius: 'var(--radius-xl)', padding: '48px', marginBottom: '48px',
+          borderLeft: '4px solid var(--primary)'
+        }}>
+          <div style={{color: 'var(--primary)', fontWeight: 'bold', marginBottom: '16px', letterSpacing: '1px'}}>AI ASSESSOR</div>
+          <h2 style={{fontSize: '32px', lineHeight: '1.4'}}>{q?.question}</h2>
+        </div>
+        
+        <div style={{
+          background: 'var(--glass-bg)', backdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)',
+          borderRadius: 'var(--radius-xl)', padding: '48px', display: 'flex', flexDirection: 'column', alignItems: 'center'
+        }}>
+           <div style={{color: 'white', fontWeight: 'bold', marginBottom: '32px', letterSpacing: '1px', alignSelf: 'flex-start'}}>YOUR ANSWER</div>
+           
+           <textarea
+             style={{
+               width: '100%', minHeight: '150px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)',
+               borderRadius: 'var(--radius-md)', padding: '24px', color: 'var(--text-main)', fontSize: '18px',
+               marginBottom: '32px', resize: 'vertical'
+             }}
+             placeholder="Type your answer here..."
+             value={userAnswer}
+             onChange={e => setUserAnswer(e.target.value)}
+           />
+           
+           <button onClick={submitAnswer} disabled={!userAnswer.trim()} className="btn-primary" style={{width: '100%', padding: '20px', fontSize: '20px'}}>
+             Submit Answer
+           </button>
+        </div>
       </div>
     </div>
   );

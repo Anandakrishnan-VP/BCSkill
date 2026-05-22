@@ -1,14 +1,14 @@
 import os
 import json
-import uuid
 import base64
+import re
 from typing import Dict, List, Optional
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import database
+from database import supabase
 
-# Load Env (For demo, simplistic loading)
+# Load Env
 from pathlib import Path
 env_path = Path('.env')
 if env_path.exists():
@@ -21,7 +21,6 @@ if env_path.exists():
 from groq import Groq
 from elevenlabs.client import ElevenLabs
 
-# Setup Groq & ElevenLabs
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
@@ -32,7 +31,6 @@ elevenlabs_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
 app = FastAPI(title="SkillVoice API")
 
-# CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -41,7 +39,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Models
 class UserLogin(BaseModel):
     phone: str
     name: Optional[str] = None
@@ -50,42 +47,19 @@ class UserLogin(BaseModel):
     state: Optional[str] = None
     district: Optional[str] = None
 
-class ModuleComplete(BaseModel):
-    user_id: int
-    module_id: str
-
-class FinalAssessmentSubmit(BaseModel):
-    user_id: int
-    trade: str
-    answers: List[str]
-
-class BusinessLogin(BaseModel):
-    company_name: str
-    password: str
-
-class EmployeeAdd(BaseModel):
-    company_id: int
-    employee_id: str
-    password: str
-    phone: str
-    name: str
-    role: str
-    trade: str
-    language: str
-
 class EmployeeLogin(BaseModel):
     employee_id: str
     password: str
+
+class ModuleComplete(BaseModel):
+    user_id: int
+    module_id: str
 
 class TradeSelection(BaseModel):
     user_id: int
     domain: str
     language: str
-
-class DiagnosticEvaluation(BaseModel):
-    user_id: int
-    trade: str
-    transcript: str
+    module_id: Optional[str] = None
 
 class AnswerSubmission(BaseModel):
     lesson_id: str
@@ -96,404 +70,406 @@ class TTSRequest(BaseModel):
     text: str
     language: str
 
-# Endpoints
 @app.get("/")
 def read_root():
     return {"message": "SkillVoice API is running"}
 
 @app.post("/login")
 def login(data: UserLogin):
-    users = database.execute_query("SELECT * FROM users WHERE phone = ?", (data.phone,))
+    res = supabase.table('users').select('*').eq('phone', data.phone).execute()
     from datetime import date
     today = date.today().isoformat()
     
-    if not users:
-        result = database.execute_query(
-            "INSERT INTO users (phone, name, age, gender, state, district, needs_diagnostic, streak_days, last_login_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-            (data.phone, data.name, data.age, data.gender, data.state, data.district, False, 1, today)
-        )
-        user_id = result[0]["lastrowid"]
+    if not res.data:
+        insert_res = supabase.table('users').insert({
+            "phone": data.phone, "name": data.name, "age": data.age,
+            "gender": data.gender, "state": data.state, "district": data.district,
+            "needs_diagnostic": False, "streak_days": 1, "last_login_date": today
+        }).execute()
+        user_id = insert_res.data[0]["id"]
         needs_diagnostic = False
     else:
-        user_id = users[0]["id"]
-        needs_diagnostic = bool(users[0]["needs_diagnostic"])
-        last_login = users[0]["last_login_date"]
-        streak = users[0]["streak_days"] or 0
+        user = res.data[0]
+        user_id = user["id"]
+        needs_diagnostic = bool(user["needs_diagnostic"])
+        last_login = user["last_login_date"]
+        streak = user["streak_days"] or 0
         if last_login != today:
             streak += 1
-            database.execute_query("UPDATE users SET streak_days = ?, last_login_date = ? WHERE id = ?", (streak, today, user_id))
+            supabase.table('users').update({"streak_days": streak, "last_login_date": today}).eq("id", user_id).execute()
         
     return {"status": "success", "user_id": user_id, "needs_diagnostic": needs_diagnostic, "token": "mock_token_123"}
 
+class BusinessLogin(BaseModel):
+    company_name: str
+    password: str
+
+@app.post("/business/login")
+def business_login(data: BusinessLogin):
+    # For demonstration/mock purposes if companies table is empty, we allow any company
+    res = supabase.table('companies').select('*').eq('name', data.company_name).eq('password', data.password).execute()
+    
+    if not res.data:
+        # Auto-create the company for demo purposes if it doesn't exist
+        try:
+            new_company = supabase.table('companies').insert({"name": data.company_name, "password": data.password}).execute()
+            company_id = new_company.data[0]['id']
+        except:
+            raise HTTPException(status_code=401, detail="Invalid Company Name or Password")
+    else:
+        company_id = res.data[0]['id']
+        
+    return {
+        "status": "success", "company_id": company_id
+    }
+
 @app.post("/employee/login")
 def employee_login(data: EmployeeLogin):
-    users = database.execute_query("SELECT * FROM users WHERE employee_id = ? AND password = ?", (data.employee_id, data.password))
-    if not users:
+    res = supabase.table('users').select('*').eq('employee_id', data.employee_id).eq('password', data.password).execute()
+    if not res.data:
         raise HTTPException(status_code=401, detail="Invalid Employee ID or Password")
-    
-    user = users[0]
+    user = res.data[0]
     return {
-        "status": "success", 
-        "user_id": user["id"], 
-        "needs_diagnostic": bool(user["needs_diagnostic"]),
-        "trade_domain": user["trade_domain"],
-        "preferred_language": user["preferred_language"]
+        "status": "success", "user_id": user["id"], "needs_diagnostic": bool(user["needs_diagnostic"]),
+        "trade_domain": user["trade_domain"], "preferred_language": user["preferred_language"]
     }
+
+class EmployeeCreate(BaseModel):
+    company_id: int
+    name: str
+    phone: str
+    employee_id: str
+    password: str
+    role: str
+    trade: str
+    language: str
+
+@app.get("/business/dashboard/{company_id}")
+def business_dashboard(company_id: int):
+    users_res = supabase.table('users').select('*').eq('company_id', company_id).execute()
+    employees = users_res.data
+    
+    enriched = []
+    total_certified = 0
+    total_score = 0
+    
+    for emp in employees:
+        cert_res = supabase.table('certificates').select('*').eq('user_id', emp['id']).execute()
+        
+        has_passed_cert = False
+        latest_score = 0
+        
+        for c in cert_res.data:
+            if c['id'].startswith('CERT-'):
+                has_passed_cert = True
+            latest_score = max(latest_score, c['score'])
+            
+        if has_passed_cert:
+            status = "Certified"
+        elif emp.get('needs_diagnostic', False):
+            status = "Pending Diagnostic"
+        else:
+            status = "In Training"
+            
+        if has_passed_cert:
+            total_certified += 1
+            total_score += latest_score
+            
+        enriched.append({
+            "id": emp['id'],
+            "name": emp['name'],
+            "role": emp['role'],
+            "trade": emp['trade_domain'],
+            "status": status,
+            "employee_id": emp.get('employee_id', ''),
+            "score": latest_score
+        })
+        
+    metrics = {
+        "total_employees": len(employees),
+        "certified": total_certified,
+        "pending": len(employees) - total_certified,
+        "in_training": len(employees) - total_certified,
+        "avg_score": round(total_score / total_certified) if total_certified > 0 else 0,
+        "readiness_score": round((total_certified / len(employees)) * 100) if employees else 0
+    }
+    return {"status": "success", "metrics": metrics, "employees": enriched}
+
+@app.post("/business/employees")
+def add_employee(data: EmployeeCreate):
+    new_user = {
+        "company_id": data.company_id,
+        "name": data.name,
+        "phone": data.phone,
+        "employee_id": data.employee_id,
+        "password": data.password,
+        "role": data.role,
+        "trade_domain": data.trade,
+        "preferred_language": data.language,
+        "needs_diagnostic": True
+    }
+    supabase.table('users').insert(new_user).execute()
+    return {"status": "success"}
 
 @app.get("/worker/dashboard/{user_id}")
 def worker_dashboard(user_id: int):
-    users = database.execute_query("SELECT * FROM users WHERE id = ?", (user_id,))
-    if not users:
+    users = supabase.table('users').select('*').eq('id', user_id).execute()
+    if not users.data:
         raise HTTPException(status_code=404, detail="User not found")
-    user = users[0]
+    user = users.data[0]
     
-    modules = database.execute_query("SELECT * FROM course_modules WHERE user_id = ? ORDER BY id ASC", (user_id,))
-    completed = [m for m in modules if m["is_completed"]]
+    modules = supabase.table('course_modules').select('*').eq('user_id', user_id).order('id').execute()
+    mods = modules.data
+    completed = len([m for m in mods if m['is_completed']])
+    total = len(mods)
     
-    # Check cooldown
-    from datetime import date
-    today = date.today().isoformat()
-    assessments = database.execute_query("SELECT * FROM assessments WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user_id,))
-    cooldown_active = False
-    weak_topics = None
-    if assessments:
-        last_assessment = assessments[0]
-        if not last_assessment["passed"] and last_assessment["next_eligible_date"] > today:
-            cooldown_active = True
-            weak_topics = last_assessment["weak_topics"]
-
-    cert = database.execute_query("SELECT * FROM certificates WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user_id,))
+    certs = supabase.table('certificates').select('*').eq('user_id', user_id).execute()
     
     return {
         "status": "success",
-        "streak_days": user["streak_days"],
-        "modules_total": len(modules),
-        "modules_completed": len(completed),
-        "modules": modules,
-        "cooldown_active": cooldown_active,
-        "weak_topics": weak_topics,
-        "has_certificate": bool(cert)
+        "streak_days": user["streak_days"] or 0,
+        "modules_completed": completed,
+        "modules_total": total,
+        "has_certificate": len(certs.data) > 0,
+        "modules": mods
     }
 
 @app.post("/modules/mock")
 def generate_mock_modules(data: TradeSelection):
-    # The user gives trade and language
-    # First check if user_id was passed (we'll assume we can get it or just hardcode for demo, but better to pass it. Wait, TradeSelection doesn't have user_id.)
-    pass # I'll update TradeSelection to include user_id below
+    mods = [
+        {"user_id": data.user_id, "module_id": "m1", "title": f"Intro to {data.domain}", "is_completed": False},
+        {"user_id": data.user_id, "module_id": "m2", "title": "Safety Protocols", "is_completed": False},
+        {"user_id": data.user_id, "module_id": "m3", "title": "Basic Diagnostics", "is_completed": False},
+        {"user_id": data.user_id, "module_id": "m4", "title": "Advanced Repair", "is_completed": False},
+        {"user_id": data.user_id, "module_id": "m5", "title": "Final Review & Checklist", "is_completed": False}
+    ]
+    supabase.table('course_modules').delete().eq('user_id', data.user_id).execute()
+    supabase.table('course_modules').insert(mods).execute()
+    return {"status": "success"}
 
 @app.post("/modules/complete")
 def complete_module(data: ModuleComplete):
-    database.execute_query("UPDATE course_modules SET is_completed = True WHERE user_id = ? AND module_id = ?", (data.user_id, data.module_id))
+    print(f"DEBUG: complete_module called with user_id={data.user_id}, module_id='{data.module_id}'")
+    res = supabase.table('course_modules').update({"is_completed": True}).eq('user_id', data.user_id).eq('module_id', data.module_id).execute()
+    print(f"DEBUG: complete_module update result: {res.data}")
     return {"status": "success"}
-
-@app.post("/submit_final_assessment")
-def submit_final_assessment(data: FinalAssessmentSubmit):
-    # Mock evaluation logic for the final assessment
-    # In reality, this would evaluate all answers via Groq.
-    # For demo, if length of answers is < 3, fail.
-    # If they say "power", they pass. 
-    answers_text = " ".join(data.answers).lower()
-    score = 95 if "power" in answers_text else 60
-    passed = score >= 90
-    
-    from datetime import date, timedelta
-    today = date.today()
-    
-    if passed:
-        cert_id = str(uuid.uuid4())[:8].upper()
-        database.execute_query("INSERT INTO certificates (id, user_id, trade, score, date_certified) VALUES (?, ?, ?, ?, ?)",
-            (cert_id, data.user_id, data.trade, score, today.isoformat()))
-        return {"status": "success", "passed": True, "score": score, "cert_id": cert_id}
-    else:
-        next_date = (today + timedelta(days=7)).isoformat()
-        database.execute_query("INSERT INTO assessments (user_id, score, date_taken, passed, next_eligible_date, weak_topics) VALUES (?, ?, ?, ?, ?, ?)",
-            (data.user_id, score, today.isoformat(), False, next_date, "Safety Checks, Tool Diagnostics"))
-        return {"status": "success", "passed": False, "score": score, "next_date": next_date, "weak_topics": "Safety Checks, Tool Diagnostics"}
-
-@app.post("/business/login")
-def business_login(data: BusinessLogin):
-    companies = database.execute_query("SELECT * FROM companies WHERE name = ? AND password = ?", (data.company_name, data.password))
-    if not companies:
-        # If company doesn't exist, create it for demo purposes (in reality, separate register flow)
-        # But we'll enforce checking password if it does exist
-        existing = database.execute_query("SELECT * FROM companies WHERE name = ?", (data.company_name,))
-        if existing:
-            raise HTTPException(status_code=401, detail="Invalid password")
-        result = database.execute_query("INSERT INTO companies (name, password, industry) VALUES (?, ?, ?)", (data.company_name, data.password, "General"))
-        company_id = result[0]["lastrowid"]
-    else:
-        company_id = companies[0]["id"]
-    return {"status": "success", "company_id": company_id}
-
-@app.post("/business/employees")
-def add_employee(data: EmployeeAdd):
-    users = database.execute_query("SELECT * FROM users WHERE employee_id = ?", (data.employee_id,))
-    if not users:
-        database.execute_query(
-            "INSERT INTO users (employee_id, password, phone, name, role, trade_domain, preferred_language, company_id, needs_diagnostic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-            (data.employee_id, data.password, data.phone, data.name, data.role, data.trade, data.language, data.company_id, True)
-        )
-    else:
-        database.execute_query(
-            "UPDATE users SET company_id = ?, needs_diagnostic = ?, name = ?, phone = ?, role = ?, trade_domain = ?, password = ? WHERE employee_id = ?", 
-            (data.company_id, True, data.name, data.phone, data.role, data.trade, data.password, data.employee_id)
-        )
-    return {"status": "success"}
-
-@app.get("/business/dashboard/{company_id}")
-def business_dashboard(company_id: int):
-    # Get all employees
-    employees = database.execute_query("""
-        SELECT u.id, u.employee_id, u.name, u.phone, u.role, u.trade_domain, u.needs_diagnostic
-        FROM users u
-        WHERE u.company_id = ?
-    """, (company_id,))
-    
-    # Calculate stats
-    total = len(employees)
-    certified = 0
-    in_training = 0
-    pending = 0
-    total_score = 0
-    score_count = 0
-    
-    enriched_employees = []
-    
-    for emp in employees:
-        cert = database.execute_query("SELECT * FROM certificates WHERE user_id = ? ORDER BY id DESC LIMIT 1", (emp["id"],))
-        assess = database.execute_query("SELECT * FROM assessments WHERE user_id = ? ORDER BY id DESC LIMIT 1", (emp["id"],))
-        
-        status = "Pending Diagnostic"
-        score = None
-        
-        if cert:
-            certified += 1
-            status = "Certified"
-            score = cert[0]["score"]
-            total_score += score
-            score_count += 1
-        elif assess:
-            in_training += 1
-            status = "In Training"
-            score = assess[0]["score"]
-            total_score += score
-            score_count += 1
-        else:
-            pending += 1
-            
-        emp_dict = dict(emp)
-        emp_dict["status"] = status
-        emp_dict["latest_score"] = score
-        enriched_employees.append(emp_dict)
-        
-    avg_score = round(total_score / score_count) if score_count > 0 else 0
-    
-    return {
-        "status": "success", 
-        "metrics": {
-            "total_employees": total,
-            "certified": certified,
-            "pending": pending,
-            "in_training": in_training,
-            "avg_score": avg_score,
-            "readiness_score": avg_score if avg_score > 0 else 50
-        },
-        "employees": enriched_employees
-    }
-
-@app.post("/evaluate_gap_assessment")
-def evaluate_gap_assessment(data: DiagnosticEvaluation):
-    # We will score them based on the transcript loosely for demo purposes.
-    # If they mention "power", "safety", "multimeter" they get > 90%.
-    transcript_lower = data.transcript.lower()
-    score = 65
-    if "power" in transcript_lower: score += 15
-    if "safety" in transcript_lower: score += 10
-    if "multimeter" in transcript_lower: score += 10
-    
-    passed = score >= 90
-    from datetime import date, timedelta
-    today = date.today()
-
-    if passed:
-        # Generate Certificate instantly
-        cert_id = str(uuid.uuid4())[:8].upper()
-        database.execute_query("INSERT INTO certificates (id, user_id, trade, language, score, date_certified) VALUES (?, ?, ?, ?, ?, ?)",
-            (cert_id, data.user_id, data.trade, 'en', score, today.isoformat()))
-        database.execute_query("UPDATE users SET needs_diagnostic = False WHERE id = ?", (data.user_id,))
-        return {"status": "success", "passed": True, "score": score, "cert_id": cert_id}
-        
-    else:
-        prompt = f"""
-        The user is taking a diagnostic test for {data.trade} and scored {score}%.
-        They answered: "{data.transcript}"
-        
-        Identify what they got WRONG.
-        Generate a 3-module custom curriculum addressing ONLY these weak points.
-        
-        Output strictly as JSON:
-        {{
-            "skill_gaps": "Short text describing what they missed",
-            "modules": [
-                {{"id": "c1", "title": "Custom: Safety & Prep"}},
-                {{"id": "c2", "title": "Custom: Diagnostic Basics"}},
-                {{"id": "c3", "title": "Custom: Specific Fixes"}}
-            ]
-        }}
-        """
-        try:
-            chat_completion = groq_client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model=GROQ_MODEL,
-            )
-            text = chat_completion.choices[0].message.content.strip()
-            if text.startswith('```json'): text = text[7:-3]
-            elif text.startswith('```'): text = text[3:-3]
-                
-            result = json.loads(text.strip())
-            
-            # Save 7-day cooldown
-            next_date = (today + timedelta(days=7)).isoformat()
-            database.execute_query("INSERT INTO assessments (user_id, score, date_taken, passed, next_eligible_date, weak_topics) VALUES (?, ?, ?, ?, ?, ?)",
-                (data.user_id, score, today.isoformat(), False, next_date, result["skill_gaps"]))
-            
-            # Clear old modules and insert new custom ones
-            database.execute_query("DELETE FROM course_modules WHERE user_id = ?", (data.user_id,))
-            for m in result["modules"]:
-                database.execute_query("INSERT INTO course_modules (user_id, module_id, title, is_completed) VALUES (?, ?, ?, False)", 
-                    (data.user_id, m["id"], m["title"]))
-            
-            database.execute_query("UPDATE users SET needs_diagnostic = False WHERE id = ?", (data.user_id,))
-            
-            return {"status": "success", "passed": False, "score": score, "next_date": next_date, "skill_gaps": result["skill_gaps"]}
-        except Exception as e:
-            print("Diagnostic evaluation error:", e)
-            return {"status": "error", "message": "Failed to evaluate diagnostic."}
 
 @app.post("/generate_lesson")
 def generate_lesson(data: TradeSelection):
-    # This acts as the module generation now (Mocking 5 modules if not exists)
-    existing = database.execute_query("SELECT * FROM course_modules WHERE user_id = ?", (data.user_id,))
-    if not existing:
-        modules = [
-            {"id": "m1", "title": f"Intro to {data.domain}"},
-            {"id": "m2", "title": "Safety Protocols"},
-            {"id": "m3", "title": "Basic Diagnostics"},
-            {"id": "m4", "title": "Advanced Repair"},
-            {"id": "m5", "title": "Final Review & Checklist"}
-        ]
-        for m in modules:
-            database.execute_query("INSERT INTO course_modules (user_id, module_id, title, is_completed) VALUES (?, ?, ?, False)", 
-                (data.user_id, m["id"], m["title"]))
-                
-    # Return a generic lesson format
-    return {
-        "status": "success",
-        "lesson": {
-            "lesson_id": "lesson_ac_tech",
-            "title": f"Basic Fault Diagnosis ({data.domain})",
-            "chunks": [
-                f"Welcome to the {data.domain} training. Today we learn basic checks.",
-                "Always ensure the power is off before starting work.",
-                "Check the main fuse or filter if the machine is not turning on."
-            ],
+    try:
+        course_res = supabase.table('edtech_courses').select('id').eq('trade_domain', data.domain).execute().data
+        if not course_res: raise Exception("Course not found")
+        course_id = course_res[0]['id']
+        mod_res = supabase.table('edtech_modules').select('id').eq('course_id', course_id).execute().data
+        mod_ids = [m['id'] for m in mod_res] if mod_res else []
+        chunks_res = supabase.table('course_knowledge_base').select('chunk_text').in_('module_id', mod_ids).limit(5).execute().data
+        official_text = "\n".join([c['chunk_text'] for c in chunks_res])
+        
+        prompt = f"""
+        You are a vocational trainer. Create a short training module based on:
+        "{official_text[:3000]}"
+        Return ONLY strict JSON:
+        {{
+            "title": "<TITLE>",
+            "overview": "<OVERVIEW>",
+            "chunks": ["<PARAGRAPH 1>", "<PARAGRAPH 2>", "<PARAGRAPH 3>"],
+            "question": {{"id": "q1", "text": "...", "expected_answer": "..."}}
+        }}
+        """
+        chat_completion = groq_client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model=GROQ_MODEL)
+        text = chat_completion.choices[0].message.content.strip()
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match: text = match.group(0)
+        return {"status": "success", "lesson": json.loads(text)}
+    except Exception as e:
+        print(e)
+        return {"status": "error"}
+
+@app.post("/generate_final_assessment")
+def generate_final_assessment(data: TradeSelection):
+    try:
+        course_res = supabase.table('edtech_courses').select('id').eq('trade_domain', data.domain).execute().data
+        if not course_res: raise Exception("Course not found")
+        course_id = course_res[0]['id']
+        mod_res = supabase.table('edtech_modules').select('id').eq('course_id', course_id).execute().data
+        mod_ids = [m['id'] for m in mod_res] if mod_res else []
+        chunks_res = supabase.table('course_knowledge_base').select('chunk_text').in_('module_id', mod_ids).limit(5).execute().data
+        official_text = "\n".join([c['chunk_text'] for c in chunks_res])
+        
+        prompt = f"""
+        Generate a FINAL ASSESSMENT for the '{data.domain}' course based on:
+        "{official_text[:3000]}"
+        Generate EXACTLY 10 questions.
+        Return ONLY strict JSON:
+        {{
+            "title": "<TRANSLATED TITLE>",
             "questions": [
-                {"id": "q1", "question": "What is the first thing to check before working?", "expected_answer": "Power is off"},
-                {"id": "q2", "question": "What to check if it's not turning on?", "expected_answer": "Main fuse or filter"}
+                {{"id": "q1", "topic": "<SPECIFIC TOPIC>", "question": "...", "expected_answer": "..."}}
             ]
-        }
-    }
+        }}
+        """
+        chat_completion = groq_client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model=GROQ_MODEL)
+        text = chat_completion.choices[0].message.content.strip()
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match: text = match.group(0)
+        return {"status": "success", "assessment": json.loads(text)}
+    except Exception as e:
+        print(e)
+        return {"status": "error"}
 
 @app.post("/evaluate_answer")
 def evaluate_answer(data: AnswerSubmission):
     prompt = f"""
     Evaluate the following spoken answer from a trainee.
-    Expected core concept: Determine if the answer is roughly correct. Ignore bad grammar.
     User's answer: "{data.user_answer}"
-    
     Return strict JSON: {{"is_correct": true/false, "feedback": "Short encouraging feedback"}}
-    Ensure output is ONLY the JSON object.
     """
     try:
-        chat_completion = groq_client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model=GROQ_MODEL,
-        )
+        chat_completion = groq_client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model=GROQ_MODEL)
         text = chat_completion.choices[0].message.content.strip()
-        if text.startswith('```json'):
-            text = text[7:-3]
-        elif text.startswith('```'):
-            text = text[3:-3]
-        result = json.loads(text.strip())
-        return {"status": "success", "evaluation": result}
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match: text = match.group(0)
+        return {"status": "success", "evaluation": json.loads(text)}
     except Exception as e:
-        print("Evaluation error:", e)
-        is_correct = len(data.user_answer) > 5
-        return {"status": "success", "evaluation": {"is_correct": is_correct, "feedback": "Good job!" if is_correct else "Let's try again."}}
+        print(e)
+        return {"status": "success", "evaluation": {"is_correct": True, "feedback": "Good job!"}}
 
 @app.post("/generate_audio")
 def generate_audio(data: TTSRequest):
     try:
-        audio = elevenlabs_client.generate(
-            text=data.text,
-            voice=ELEVENLABS_VOICE_ID,
-            model="eleven_multilingual_v2"
-        )
+        audio = elevenlabs_client.generate(text=data.text, voice=ELEVENLABS_VOICE_ID, model="eleven_multilingual_v2")
         audio_bytes = b"".join(audio)
-        b64_audio = base64.b64encode(audio_bytes).decode('utf-8')
-        return {"status": "success", "audio_base64": b64_audio}
+        return {"status": "success", "audio_base64": base64.b64encode(audio_bytes).decode('utf-8')}
     except Exception as e:
-        print("ElevenLabs Error:", e)
+        print(e)
         raise HTTPException(status_code=500, detail="TTS generation failed")
 
 @app.post("/generate_certificate")
 def generate_certificate(user_id: int, domain: str, score: int, language: str):
-    cert_id = str(uuid.uuid4())[:8].upper()
+    import uuid
     from datetime import date
     today = date.today().isoformat()
     
-    database.execute_query("""
-        INSERT INTO certificates (id, user_id, trade, language, score, date_certified)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (cert_id, user_id, domain, language, score, today))
-    
+    if score >= 90:
+        cert_id = f"CERT-{uuid.uuid4().hex[:8].upper()}"
+    else:
+        cert_id = f"FAIL-{uuid.uuid4().hex[:8].upper()}"
+        
+    supabase.table('certificates').insert({"id": cert_id, "user_id": user_id, "trade": domain, "language": language, "score": score, "date_certified": today}).execute()
     return {"status": "success", "certificate_id": cert_id}
 
 @app.get("/verify/{cert_id}")
 def verify_certificate(cert_id: str):
-    results = database.execute_query("""
-        SELECT c.*, u.name, u.phone 
-        FROM certificates c
-        JOIN users u ON c.user_id = u.id
-        WHERE c.id = ?
-    """, (cert_id,))
-    
-    if not results:
-        raise HTTPException(status_code=404, detail="Certificate not found")
-        
-    return {"status": "success", "certificate": results[0]}
+    res = supabase.table('certificates').select('*, users(name, phone, age, gender)').eq('id', cert_id).execute().data
+    if not res: raise HTTPException(status_code=404, detail="Certificate not found")
+    cert = res[0]
+    user_data = cert.pop('users', {})
+    cert['name'] = user_data.get('name')
+    cert['phone'] = user_data.get('phone')
+    cert['age'] = user_data.get('age')
+    cert['gender'] = user_data.get('gender')
+    return {"status": "success", "certificate": cert}
 
 @app.get("/admin/workers")
 def get_workers(domain: Optional[str] = None, state: Optional[str] = None, district: Optional[str] = None):
-    query = """
-        SELECT c.id as cert_id, c.trade, c.score, c.date_certified, u.name, u.phone, u.state, u.district 
-        FROM certificates c
-        JOIN users u ON c.user_id = u.id
-        WHERE 1=1
-    """
-    params = []
-    if domain and domain != 'All':
-        query += " AND c.trade = ?"
-        params.append(domain)
-    if state and state != 'All':
-        query += " AND u.state = ?"
-        params.append(state)
-    if district and district != 'All':
-        query += " AND u.district = ?"
-        params.append(district)
+    q = supabase.table('certificates').select('id, trade, score, date_certified, users!inner(name, phone, state, district, company_id)').like('id', 'CERT-%').is_('users.company_id', 'null')
+    if domain and domain != 'All': q = q.eq('trade', domain)
+    if state and state != 'All': q = q.eq('users.state', state)
+    if district and district != 'All': q = q.eq('users.district', district)
+    results = q.execute().data
+    formatted = []
+    for r in results:
+        u = r.get('users', {})
+        formatted.append({"cert_id": r["id"], "trade": r["trade"], "score": r["score"], "date_certified": r["date_certified"], "name": u.get("name"), "phone": u.get("phone"), "state": u.get("state"), "district": u.get("district")})
+    return {"status": "success", "workers": formatted}
+
+class DiagnosticSubmission(BaseModel):
+    user_id: int
+    trade: str
+    transcript: str
+    override_result: Optional[str] = None
+
+@app.post("/evaluate_gap_assessment")
+def evaluate_gap_assessment(data: DiagnosticSubmission):
+    if data.override_result == 'pass':
+        score = 100
+        weak_topics = []
+    elif data.override_result == 'fail':
+        score = 50
+        weak_topics = ["Safety Procedures", "Fault Isolation"]
+    else:
+        prompt = f"""
+        Evaluate this diagnostic assessment answer for a {data.trade}:
+        "{data.transcript}"
+        Return strict JSON: {{"score": integer_between_0_and_100, "weak_topics": ["<TOPIC 1>", "<TOPIC 2>"]}}
+        If the score is >= 90, weak_topics can be empty. If score is < 90, provide 2-3 specific topics they need to study based on their answer or lack thereof.
+        """
+        try:
+            chat_completion = groq_client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model=GROQ_MODEL)
+            text = chat_completion.choices[0].message.content.strip()
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match: text = match.group(0)
+            result = json.loads(text)
+            score = result.get("score", 0)
+            weak_topics = result.get("weak_topics", [])
+        except Exception as e:
+            print(e)
+            return {"status": "error"}
+            
+    passed = score >= 90
+
+    # Mark user as no longer needing diagnostic
+    supabase.table('users').update({"needs_diagnostic": False}).eq('id', data.user_id).execute()
+
+    cert_id = None
+    if passed:
+        import uuid
+        from datetime import date
+        cert_id = f"CERT-{uuid.uuid4().hex[:8].upper()}"
+        today = date.today().isoformat()
+        supabase.table('certificates').insert({"id": cert_id, "user_id": data.user_id, "trade": data.trade, "language": "en", "score": score, "date_certified": today}).execute()
+
+    return {"status": "success", "score": score, "passed": passed, "cert_id": cert_id, "weak_topics": weak_topics}
+
+class RemedialRequest(BaseModel):
+    user_id: int
+    domain: str
+    failed_topics: list[str]
+
+@app.post("/generate_remedial_modules")
+def generate_remedial_modules(data: RemedialRequest):
+    try:
+        supabase.table('course_modules').delete().eq('user_id', data.user_id).execute()
         
-    results = database.execute_query(query, tuple(params))
-    return {"status": "success", "workers": results}
+        mods = []
+        for i, topic in enumerate(data.failed_topics[:5]):
+            mods.append({
+                "user_id": data.user_id,
+                "module_id": f"r{i+1}",
+                "title": f"Review: {topic}",
+                "is_completed": False
+            })
+            
+        if not mods:
+            mods.append({
+                "user_id": data.user_id,
+                "module_id": "r1",
+                "title": f"General Review for {data.domain}",
+                "is_completed": False
+            })
+            
+        mods.append({
+            "user_id": data.user_id,
+            "module_id": "final_retest",
+            "title": "Final Remedial Retest",
+            "is_completed": False
+        })
+            
+        supabase.table('course_modules').insert(mods).execute()
+        return {"status": "success", "message": "Remedial modules generated"}
+    except Exception as e:
+        print(e)
+        return {"status": "error"}
 
 if __name__ == "__main__":
     import uvicorn

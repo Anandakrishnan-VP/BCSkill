@@ -1,57 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic, Square, Loader, AlertCircle } from 'lucide-react';
-import { speakText, startListening } from '../voiceUtils';
+import { Loader, Stethoscope, AlertTriangle } from 'lucide-react';
+import { speakText } from '../voiceUtils';
 
 export default function DiagnosticSession() {
-  const [recording, setRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const userId = localStorage.getItem('user_id') || 1;
-  const trade = "General Skills"; // We'd realistically have them select a trade before this, but let's assume it.
-  
+  const trade = "General Skills";
   const diagnosticQuestion = "Your company requires a skill assessment. Please explain step-by-step how you diagnose a major fault in your primary line of work, and what safety precautions you take.";
 
-  useEffect(() => {
-    // Read the question on load
-    setTimeout(() => speakText(diagnosticQuestion, 'en-US'), 1000);
-  }, []);
-
-  const toggleRecording = () => {
-    if (recording) {
-      setRecording(false);
-      setLoading(true);
-      
-      // Stop logic is handled inside voiceUtils for real apps, here we just simulate the end of speech
-      setTimeout(() => {
-        submitAssessment(transcript || "I check the power and then I use my tools to fix the motor.");
-      }, 1000);
-    } else {
-      setRecording(true);
-      startListening(
-        (text) => setTranscript(prev => prev + ' ' + text),
-        () => {
-          setRecording(false);
-          setLoading(true);
-          submitAssessment(transcript || "I check the power and then I use my tools to fix the motor.");
-        },
-        'en-US'
-      );
-    }
-  };
-
-  const submitAssessment = async (finalTranscript) => {
+  const submitAssessment = async (overrideResult = null) => {
+    setLoading(true);
     try {
       const tradeDomain = localStorage.getItem('trade_domain') || trade;
+      
       const res = await fetch('http://localhost:8000/evaluate_gap_assessment', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           user_id: parseInt(userId),
           trade: tradeDomain,
-          transcript: finalTranscript
+          transcript: transcript || "DEV MODE",
+          override_result: overrideResult
         })
       });
       const data = await res.json();
@@ -59,11 +32,20 @@ export default function DiagnosticSession() {
       if (data.status === 'success') {
         if (data.passed) {
           localStorage.setItem('cert_id', data.cert_id);
-          speakText("Congratulations! You scored above 90 percent and passed your diagnostic. Your certificate is ready.", 'en-US');
-          setTimeout(() => navigate('/certificate'), 4000);
+          navigate('/certificate');
         } else {
-          speakText(`You scored ${data.score} percent, which is below the 90 percent requirement. We have generated a custom training path for you. You can retest in 7 days.`, 'en-US');
-          setTimeout(() => navigate('/worker/dashboard'), 8000);
+          if (data.weak_topics && data.weak_topics.length > 0) {
+            await fetch('http://localhost:8000/generate_remedial_modules', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({
+                user_id: parseInt(userId),
+                domain: tradeDomain,
+                failed_topics: data.weak_topics
+              })
+            });
+          }
+          navigate('/worker/dashboard');
         }
       }
     } catch (e) {
@@ -72,45 +54,68 @@ export default function DiagnosticSession() {
     }
   };
 
-  return (
-    <div className="page-content split-pane" style={{padding: 0, height: '100vh', overflow: 'hidden'}}>
-      {/* Left side: The diagnostic context */}
-      <div className="split-left" style={{background: 'var(--warning)', color: 'var(--text-main)', padding: '64px', justifyContent: 'center'}}>
-        <AlertCircle size={80} color="var(--text-main)" style={{marginBottom: '32px'}} />
-        <h1 style={{fontSize: '48px', fontWeight: 'bold', marginBottom: '24px'}}>Diagnostic Assessment</h1>
-        <p style={{fontSize: '32px', lineHeight: 1.5, background: 'rgba(255,255,255,0.2)', padding: '32px', borderRadius: 'var(--radius-lg)'}}>
-          {diagnosticQuestion}
-        </p>
+  if (loading) return (
+    <div className="page-content content-center animate-fade-in" style={{minHeight: '100vh'}}>
+      <div className="loader-container">
+        <div className="neon-spinner" style={{width: '64px', height: '64px', borderWidth: '6px', borderColor: 'var(--primary) transparent transparent transparent'}}></div>
+        <p style={{color: 'var(--primary)', fontSize: '24px', fontWeight: '600', marginTop: '24px'}}>Analyzing your skills and generating a custom learning path...</p>
       </div>
-      
-      {/* Right side: The Voice Input Interface */}
-      <div className="split-right content-center" style={{padding: '64px', position: 'relative'}}>
-        {loading ? (
-          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', color: 'var(--primary)'}}>
-            <Loader size={80} className="spin" style={{marginBottom: '24px'}} />
-            <h2 style={{fontSize: '24px'}}>Analyzing your skills and generating a custom learning path...</h2>
+    </div>
+  );
+
+  return (
+    <div className="main-content-area animate-fade-in" style={{padding: '48px', minHeight: '100vh', background: 'var(--bg)'}}>
+      <div style={{maxWidth: '800px', margin: '0 auto', width: '100%'}}>
+        
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '48px'}}>
+          <h1 className="title-large" style={{display: 'flex', alignItems: 'center', gap: '16px'}}>
+            <Stethoscope size={40} color="var(--primary)" />
+            Diagnostic Assessment
+          </h1>
+          <div style={{display: 'flex', gap: '12px'}}>
+            <button onClick={() => submitAssessment('pass')} style={{background: 'var(--success)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer'}}>Dev: Auto Pass</button>
+            <button onClick={() => submitAssessment('fail')} style={{background: 'var(--error)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer'}}>Dev: Auto Fail</button>
           </div>
-        ) : (
-          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: '600px'}}>
-            <h2 style={{fontSize: '24px', color: 'var(--text-muted)', marginBottom: '48px', textAlign: 'center'}}>
-              Tap the microphone to begin answering. Speak clearly.
-            </h2>
-            
-            <button 
-              className={`mic-button ${recording ? 'recording' : ''}`}
-              onClick={toggleRecording}
-              style={{width: '200px', height: '200px', marginBottom: '64px', boxShadow: recording ? '0 0 0 20px rgba(239, 68, 68, 0.2)' : 'var(--shadow-lg)'}}
-            >
-              {recording ? <Square size={80} fill="currentColor" /> : <Mic size={80} />}
-            </button>
-            
-            <div style={{background: 'var(--bg)', width: '100%', minHeight: '150px', padding: '24px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)'}}>
-               <p style={{fontSize: '18px', color: transcript ? 'var(--text-main)' : 'var(--text-muted)'}}>
-                 {transcript || "Your answer will appear here..."}
-               </p>
-            </div>
+        </div>
+
+        <div style={{
+          background: 'var(--glass-bg)', backdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)',
+          borderRadius: 'var(--radius-xl)', padding: '48px', marginBottom: '48px',
+          borderLeft: '4px solid var(--warning)', display: 'flex', gap: '24px', alignItems: 'flex-start'
+        }}>
+          <AlertTriangle size={48} color="var(--warning)" style={{flexShrink: 0}} />
+          <div>
+            <div style={{color: 'var(--warning)', fontWeight: 'bold', marginBottom: '16px', letterSpacing: '1px', textTransform: 'uppercase'}}>Corporate Requirement</div>
+            <h2 style={{fontSize: '28px', lineHeight: '1.5', color: 'white', fontWeight: '500'}}>{diagnosticQuestion}</h2>
           </div>
-        )}
+        </div>
+        
+        <div style={{
+          background: 'var(--glass-bg)', backdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)',
+          borderRadius: 'var(--radius-xl)', padding: '48px', display: 'flex', flexDirection: 'column'
+        }}>
+           <div style={{color: 'white', fontWeight: 'bold', marginBottom: '24px', letterSpacing: '1px'}}>YOUR DETAILED ANSWER</div>
+           
+           <textarea
+             style={{
+               width: '100%', minHeight: '250px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--glass-border)',
+               borderRadius: 'var(--radius-md)', padding: '24px', color: 'var(--text-main)', fontSize: '20px', lineHeight: '1.6',
+               marginBottom: '32px', resize: 'vertical', boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.5)'
+             }}
+             placeholder="Type your diagnostic procedure and safety precautions here..."
+             value={transcript}
+             onChange={e => setTranscript(e.target.value)}
+           />
+           
+           <button 
+             onClick={() => submitAssessment()} 
+             disabled={!transcript.trim()} 
+             className="btn-primary" 
+             style={{width: '100%', padding: '24px', fontSize: '22px', fontWeight: 'bold', opacity: transcript.trim() ? 1 : 0.5}}
+           >
+             Submit Diagnostic
+           </button>
+        </div>
       </div>
     </div>
   );

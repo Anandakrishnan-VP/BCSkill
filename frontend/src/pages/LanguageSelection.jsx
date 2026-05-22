@@ -1,16 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Volume2 } from 'lucide-react';
 import { speakText } from '../voiceUtils';
 
 export default function LanguageSelection() {
-  const [speaking, setSpeaking] = useState(false);
   const navigate = useNavigate();
-
-  const handleSpeak = () => {
-    setSpeaking(true);
-    speakText("Please select your language.", 'en-US', () => setSpeaking(false));
-  };
 
   const selectLanguage = (langCode, langName) => {
     localStorage.setItem('preferred_language', langCode);
@@ -27,9 +20,6 @@ export default function LanguageSelection() {
             <h2 className="title-large" style={{marginBottom: '8px'}}>Select Language</h2>
             <p style={{color: 'var(--text-muted)', fontSize: '18px'}}>Choose your preferred learning language.</p>
          </div>
-         <button className={`btn-speaker ${speaking ? 'speaking' : ''}`} onClick={handleSpeak}>
-           <Volume2 size={24} />
-         </button>
       </div>
       
       <div className="grid-cards">

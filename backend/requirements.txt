@@ -3,3 +3,7 @@ uvicorn==0.34.0
 pydantic==2.10.3
 groq==0.13.1
 elevenlabs==1.50.4
+supabase==2.4.3
+fastembed==0.2.7
+pypdf==4.2.0
+python-multipart==0.0.9
