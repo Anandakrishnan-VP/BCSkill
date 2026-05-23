@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
-import RoleSelection from './pages/RoleSelection';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import LanguageSelection from './pages/LanguageSelection';
@@ -22,7 +21,6 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/roles" element={<RoleSelection />} />
         <Route path="/worker" element={<Login />} />
         <Route path="/worker/dashboard" element={<Layout><WorkerDashboard /></Layout>} />
         <Route path="/syllabus" element={<Layout><Syllabus /></Layout>} />
