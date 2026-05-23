@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader, Stethoscope, AlertTriangle } from 'lucide-react';
-import { speakText } from '../voiceUtils';
+import { Stethoscope, AlertTriangle } from 'lucide-react';
 
 export default function DiagnosticSession() {
   const [transcript, setTranscript] = useState('');
@@ -55,52 +54,123 @@ export default function DiagnosticSession() {
   };
 
   if (loading) return (
-    <div className="page-content content-center animate-fade-in" style={{minHeight: '100vh'}}>
+    <div className="page-content content-center animate-fade-in" style={{ minHeight: '100vh', background: 'var(--bg-void)' }}>
       <div className="loader-container">
-        <div className="neon-spinner" style={{width: '64px', height: '64px', borderWidth: '6px', borderColor: 'var(--primary) transparent transparent transparent'}}></div>
-        <p style={{color: 'var(--primary)', fontSize: '24px', fontWeight: '600', marginTop: '24px'}}>Analyzing your skills and generating a custom learning path...</p>
+        <div className="neon-spinner" style={{ width: '64px', height: '64px', borderWidth: '6px' }}></div>
+        <p style={{ color: '#000000', fontSize: '22px', fontWeight: '900', marginTop: '24px', textTransform: 'uppercase', textAlign: 'center', maxWidth: '480px' }}>Analyzing your skills and generating a custom learning path...</p>
       </div>
     </div>
   );
 
   return (
-    <div className="main-content-area animate-fade-in" style={{padding: '48px', minHeight: '100vh', background: 'var(--bg)'}}>
-      <div style={{maxWidth: '800px', margin: '0 auto', width: '100%'}}>
+    <div className="main-content-area animate-fade-in" style={{ padding: '48px', minHeight: '100vh', background: 'var(--bg-void)' }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto', width: '100%' }}>
         
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '48px'}}>
-          <h1 className="title-large" style={{display: 'flex', alignItems: 'center', gap: '16px'}}>
-            <Stethoscope size={40} color="var(--primary)" />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '48px' }}>
+          <h1 className="title-large" style={{ display: 'flex', alignItems: 'center', gap: '16px', margin: 0 }}>
+            <div style={{
+              background: 'var(--primary)',
+              border: '3px solid #000000',
+              borderRadius: 'var(--radius-md)',
+              padding: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              boxShadow: '3px 3px 0px #000000'
+            }}>
+              <Stethoscope size={36} color="#000000" />
+            </div>
             Diagnostic Assessment
           </h1>
-          <div style={{display: 'flex', gap: '12px'}}>
-            <button onClick={() => submitAssessment('pass')} style={{background: 'var(--success)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer'}}>Dev: Auto Pass</button>
-            <button onClick={() => submitAssessment('fail')} style={{background: 'var(--error)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer'}}>Dev: Auto Fail</button>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <button 
+              onClick={() => submitAssessment('pass')} 
+              style={{
+                background: 'var(--success)', 
+                color: '#000000', 
+                border: '3px solid #000000', 
+                padding: '8px 16px', 
+                borderRadius: 'var(--radius-md)', 
+                fontWeight: '900', 
+                cursor: 'pointer',
+                boxShadow: '3px 3px 0px #000000',
+                textTransform: 'uppercase'
+              }}
+            >
+              Dev: Auto Pass
+            </button>
+            <button 
+              onClick={() => submitAssessment('fail')} 
+              style={{
+                background: 'var(--danger)', 
+                color: '#FFFFFF', 
+                border: '3px solid #000000', 
+                padding: '8px 16px', 
+                borderRadius: 'var(--radius-md)', 
+                fontWeight: '900', 
+                cursor: 'pointer',
+                boxShadow: '3px 3px 0px #000000',
+                textTransform: 'uppercase'
+              }}
+            >
+              Dev: Auto Fail
+            </button>
           </div>
         </div>
 
         <div style={{
-          background: 'var(--glass-bg)', backdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)',
-          borderRadius: 'var(--radius-xl)', padding: '48px', marginBottom: '48px',
-          borderLeft: '4px solid var(--warning)', display: 'flex', gap: '24px', alignItems: 'flex-start'
+          background: '#FFFFFF', 
+          border: '4px solid #000000',
+          borderRadius: 'var(--radius-md)', 
+          padding: '48px', 
+          marginBottom: '48px',
+          display: 'flex', 
+          gap: '24px', 
+          alignItems: 'flex-start',
+          boxShadow: 'var(--shadow-main)'
         }}>
-          <AlertTriangle size={48} color="var(--warning)" style={{flexShrink: 0}} />
+          <div style={{
+            background: 'var(--warning)',
+            padding: '12px',
+            border: '3px solid #000000',
+            borderRadius: 'var(--radius-md)',
+            display: 'flex',
+            alignItems: 'center',
+            boxShadow: '2px 2px 0px #000000'
+          }}>
+            <AlertTriangle size={36} color="#000000" />
+          </div>
           <div>
-            <div style={{color: 'var(--warning)', fontWeight: 'bold', marginBottom: '16px', letterSpacing: '1px', textTransform: 'uppercase'}}>Corporate Requirement</div>
-            <h2 style={{fontSize: '28px', lineHeight: '1.5', color: 'white', fontWeight: '500'}}>{diagnosticQuestion}</h2>
+            <div style={{ color: 'var(--warning)', fontWeight: '900', marginBottom: '16px', letterSpacing: '1px', textTransform: 'uppercase' }}>Corporate Requirement</div>
+            <h2 style={{ fontSize: '24px', lineHeight: '1.5', color: '#000000', fontWeight: '800' }}>{diagnosticQuestion}</h2>
           </div>
         </div>
         
         <div style={{
-          background: 'var(--glass-bg)', backdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)',
-          borderRadius: 'var(--radius-xl)', padding: '48px', display: 'flex', flexDirection: 'column'
+          background: '#FFFFFF', 
+          border: '4px solid #000000',
+          borderRadius: 'var(--radius-md)', 
+          padding: '48px', 
+          display: 'flex', 
+          flexDirection: 'column',
+          boxShadow: 'var(--shadow-main)'
         }}>
-           <div style={{color: 'white', fontWeight: 'bold', marginBottom: '24px', letterSpacing: '1px'}}>YOUR DETAILED ANSWER</div>
+           <div style={{ color: '#000000', fontWeight: '900', marginBottom: '24px', letterSpacing: '1px', textTransform: 'uppercase' }}>YOUR DETAILED ANSWER</div>
            
            <textarea
              style={{
-               width: '100%', minHeight: '250px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--glass-border)',
-               borderRadius: 'var(--radius-md)', padding: '24px', color: 'var(--text-main)', fontSize: '20px', lineHeight: '1.6',
-               marginBottom: '32px', resize: 'vertical', boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.5)'
+               width: '100%', 
+               minHeight: '250px', 
+               background: 'var(--bg-void)', 
+               border: '3px solid #000000',
+               borderRadius: 'var(--radius-md)', 
+               padding: '24px', 
+               color: '#000000', 
+               fontSize: '20px', 
+               lineHeight: '1.6',
+               marginBottom: '32px', 
+               resize: 'vertical',
+               fontWeight: '700',
+               outline: 'none'
              }}
              placeholder="Type your diagnostic procedure and safety precautions here..."
              value={transcript}
@@ -111,7 +181,17 @@ export default function DiagnosticSession() {
              onClick={() => submitAssessment()} 
              disabled={!transcript.trim()} 
              className="btn-primary" 
-             style={{width: '100%', padding: '24px', fontSize: '22px', fontWeight: 'bold', opacity: transcript.trim() ? 1 : 0.5}}
+             style={{
+               width: '100%', 
+               padding: '24px', 
+               fontSize: '22px', 
+               fontWeight: '900',
+               height: '72px',
+               cursor: transcript.trim() ? 'pointer' : 'not-allowed',
+               background: transcript.trim() ? 'var(--primary)' : '#E5E7EB',
+               borderColor: transcript.trim() ? '#000000' : '#9CA3AF',
+               boxShadow: transcript.trim() ? 'var(--shadow-main)' : 'none'
+             }}
            >
              Submit Diagnostic
            </button>

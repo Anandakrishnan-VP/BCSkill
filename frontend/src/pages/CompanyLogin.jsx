@@ -34,11 +34,11 @@ export default function CompanyLogin() {
   };
 
   return (
-    <div className="app-container split-pane" style={{padding: 0, height: '100vh', overflow: 'hidden', background: 'var(--bg-void)'}}>
+    <div className="app-container split-pane" style={{ padding: 0, height: '100vh', overflow: 'hidden' }}>
       <div className="split-left" style={{
-        background: 'radial-gradient(circle at top left, var(--secondary), var(--bg-void))',
-        borderRight: '1px solid var(--glass-border)',
-        color: 'white',
+        background: 'var(--primary)',
+        borderRight: '4px solid #000000',
+        color: '#000000',
         padding: '64px',
         display: 'flex',
         flexDirection: 'column',
@@ -46,77 +46,57 @@ export default function CompanyLogin() {
         alignItems: 'center',
         position: 'relative'
       }}>
-        {/* Glow backdrop */}
-        <div style={{
-          position: 'absolute',
-          width: '300px',
-          height: '300px',
-          background: 'radial-gradient(circle, rgba(176, 38, 255, 0.12) 0%, transparent 70%)',
-          filter: 'blur(40px)',
-          top: '20%',
-          left: '20%',
-          zIndex: 1
-        }}></div>
-
         <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div style={{
-            background: 'linear-gradient(135deg, var(--secondary), var(--tertiary))',
+            background: '#FFFFFF',
             padding: '24px',
             borderRadius: 'var(--radius-xl)',
-            boxShadow: '0 0 40px rgba(176, 38, 255, 0.25)',
+            border: '3px solid #000000',
+            boxShadow: '6px 6px 0px #000000',
             marginBottom: '40px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <Building size={72} color="white" style={{ strokeWidth: 2 }} />
+            <Building size={72} color="#000000" style={{ strokeWidth: 2.2 }} />
           </div>
           
           <h1 style={{
-            fontFamily: 'Outfit',
+            fontFamily: 'Archivo',
             fontSize: '56px',
-            fontWeight: '800',
+            fontWeight: '900',
             marginBottom: '16px',
             letterSpacing: '-1.5px',
-            background: 'linear-gradient(90deg, #ffffff, #c7d2fe)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            textAlign: 'center'
+            color: '#000000',
+            textAlign: 'center',
+            textTransform: 'uppercase'
           }}>
             Company Portal
           </h1>
           
           <p style={{
             fontSize: '22px',
-            color: 'var(--text-muted)',
+            color: '#000000',
             textAlign: 'center',
             maxWidth: '440px',
             lineHeight: 1.6,
-            fontWeight: '500'
+            fontWeight: '800'
           }}>
             Enterprise-grade staff upskilling, safety verification, and live diagnostics management.
           </p>
         </div>
       </div>
       
-      <div className="split-right content-center" style={{padding: '64px', position: 'relative', overflowY: 'auto'}}>
-        <div style={{width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column'}}>
-          <h2 className="title-large" style={{marginBottom: '48px', fontSize: '36px', textAlign: 'center'}}>Business Login</h2>
+      <div className="split-right content-center" style={{ padding: '64px', position: 'relative', overflowY: 'auto' }}>
+        <div style={{ width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column' }}>
+          <h2 className="title-large" style={{ marginBottom: '48px', fontSize: '36px', textAlign: 'center' }}>Business Login</h2>
           
-          <form onSubmit={handleLogin} style={{display: 'flex', flexDirection: 'column', gap: '24px'}}>
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <input 
               className="input-field" 
               placeholder="Company Name" 
               value={companyName} 
               onChange={e => setCompanyName(e.target.value)}
-              style={{
-                marginBottom: 0, 
-                textAlign: 'left', 
-                letterSpacing: 'normal',
-                background: 'var(--glass-bg)',
-                border: '1px solid var(--glass-border)',
-                color: 'white'
-              }}
             />
             <input 
               type="password"
@@ -124,20 +104,8 @@ export default function CompanyLogin() {
               placeholder="Password" 
               value={password} 
               onChange={e => setPassword(e.target.value)}
-              style={{
-                marginBottom: 0, 
-                textAlign: 'left', 
-                letterSpacing: 'normal',
-                background: 'var(--glass-bg)',
-                border: '1px solid var(--glass-border)',
-                color: 'white'
-              }}
             />
-            <button type="submit" className="btn-primary" style={{
-              background: 'linear-gradient(135deg, var(--secondary), var(--tertiary))',
-              boxShadow: '0 8px 24px -8px rgba(176, 38, 255, 0.5)',
-              marginTop: '24px'
-            }}>
+            <button type="submit" className="btn-primary" style={{ marginTop: '24px', height: '64px', fontSize: '20px' }}>
               Access Dashboard
             </button>
           </form>

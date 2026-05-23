@@ -25,12 +25,26 @@ export default function Sidebar() {
 
   return (
     <div className="sidebar">
-      <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '48px'}}>
-        <div style={{width: '40px', height: '40px', background: 'var(--primary)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold'}}>SV</div>
-        <h2 style={{color: 'var(--primary)', fontSize: '24px'}}>SkillVoice</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '48px' }}>
+        <div style={{ 
+          width: '40px', 
+          height: '40px', 
+          background: 'var(--tertiary)', 
+          border: '2px solid #000000', 
+          borderRadius: 'var(--radius-md)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          color: 'white', 
+          fontWeight: '900',
+          boxShadow: '2px 2px 0px #000000'
+        }}>
+          SV
+        </div>
+        <h2 style={{ color: '#000000', fontSize: '24px', fontFamily: 'Archivo', fontWeight: '900', textTransform: 'uppercase' }}>SkillVoice</h2>
       </div>
 
-      <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {menu.map((item, idx) => {
           const isActive = location.pathname.includes(item.path);
           return (
@@ -59,30 +73,55 @@ export default function Sidebar() {
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: '16px', 
-                padding: '16px 24px', 
+                padding: '14px 20px', 
                 borderRadius: 'var(--radius-md)',
                 cursor: 'pointer',
-                background: isActive ? 'linear-gradient(90deg, rgba(0, 242, 255, 0.2), transparent)' : 'transparent',
-                color: isActive ? 'var(--primary)' : 'var(--text-muted)',
-                borderLeft: isActive ? '4px solid var(--primary)' : '4px solid transparent',
-                fontWeight: isActive ? '600' : '500',
-                transition: 'all 0.3s'
+                background: isActive ? 'var(--primary)' : 'transparent',
+                color: '#000000',
+                border: isActive ? '3px solid #000000' : '3px solid transparent',
+                boxShadow: isActive ? '3px 3px 0px #000000' : 'none',
+                fontWeight: '900',
+                textTransform: 'uppercase',
+                transition: 'all 0.1s ease'
               }}
             >
               {item.icon}
-              <span style={{fontSize: '18px'}}>{item.name}</span>
+              <span style={{ fontSize: '16px' }}>{item.name}</span>
             </div>
           )
         })}
+        
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 24px', 
-          cursor: 'pointer', color: 'var(--error)', transition: 'all 0.3s'
-        }} onClick={() => {
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '16px', 
+          padding: '14px 20px', 
+          borderRadius: 'var(--radius-md)',
+          cursor: 'pointer', 
+          color: '#000000', 
+          border: '3px solid transparent',
+          fontWeight: '900',
+          textTransform: 'uppercase',
+          transition: 'all 0.1s ease',
+          marginTop: '20px'
+        }} 
+        onClick={() => {
           localStorage.clear();
           navigate('/');
-        }}>
+        }}
+        onMouseOver={e => {
+          e.currentTarget.style.background = 'var(--danger)';
+          e.currentTarget.style.borderColor = '#000000';
+          e.currentTarget.style.boxShadow = '3px 3px 0px #000000';
+        }}
+        onMouseOut={e => {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.borderColor = 'transparent';
+          e.currentTarget.style.boxShadow = 'none';
+        }}
+        >
           <LogOut size={24} />
-          <span style={{fontSize: '18px', fontWeight: 'bold'}}>{getLangText(lang, 'logout')}</span>
+          <span style={{ fontSize: '16px' }}>{getLangText(lang, 'logout')}</span>
         </div>
       </div>
 
@@ -91,9 +130,7 @@ export default function Sidebar() {
         <div className="animate-fade-in" style={{
           position: 'fixed',
           top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.7)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
+          background: 'rgba(0, 0, 0, 0.4)',
           zIndex: 9999,
           display: 'flex',
           alignItems: 'center',
@@ -101,9 +138,9 @@ export default function Sidebar() {
           padding: '24px'
         }}>
           <div style={{
-            background: 'var(--glass-bg)',
-            border: '1px solid var(--primary)',
-            boxShadow: '0 20px 40px -10px rgba(0, 242, 255, 0.2)',
+            background: '#FFFFFF',
+            border: '4px solid #000000',
+            boxShadow: '8px 8px 0px #000000',
             borderRadius: 'var(--radius-lg)',
             padding: '32px',
             maxWidth: '400px',
@@ -111,18 +148,29 @@ export default function Sidebar() {
             textAlign: 'center',
             position: 'relative'
           }}>
-            <div style={{background: 'rgba(255, 50, 50, 0.1)', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px'}}>
-              <X size={32} color="var(--error)" />
+            <div style={{
+              background: 'var(--danger)', 
+              width: '64px', 
+              height: '64px', 
+              borderRadius: 'var(--radius-md)', 
+              border: '3px solid #000000',
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              margin: '0 auto 24px',
+              boxShadow: '3px 3px 0px #000000'
+            }}>
+              <X size={32} color="#FFFFFF" />
             </div>
             
-            <h3 style={{color: 'white', fontSize: '24px', marginBottom: '16px', fontWeight: 'bold'}}>{getLangText(lang, 'accessDenied')}</h3>
-            <p style={{color: 'var(--text-muted)', fontSize: '18px', lineHeight: '1.5', marginBottom: '32px'}}>
+            <h3 style={{ color: '#000000', fontSize: '24px', marginBottom: '16px', fontWeight: '900', textTransform: 'uppercase' }}>{getLangText(lang, 'accessDenied')}</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '16px', lineHeight: '1.5', marginBottom: '32px', fontWeight: '700' }}>
               {toastMsg}
             </p>
             
             <button 
               className="btn-primary" 
-              style={{width: '100%', padding: '16px', fontSize: '18px'}} 
+              style={{ width: '100%', padding: '16px', fontSize: '18px' }} 
               onClick={() => setToastMsg(null)}
             >
               {getLangText(lang, 'understood')}

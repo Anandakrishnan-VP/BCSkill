@@ -42,32 +42,87 @@ export default function Certificate() {
     fetchCert();
   }, [certId, navigate]);
 
-  if (loading) return <div className="page-content content-center"><div className="neon-spinner"></div></div>;
+  if (loading) return (
+    <div className="page-content content-center" style={{ background: 'var(--bg-void)' }}>
+      <div className="loader-container">
+        <div className="neon-spinner" style={{ width: '64px', height: '64px', borderWidth: '6px' }}></div>
+      </div>
+    </div>
+  );
+
   if (!certData) return null;
 
   return (
-    <div className="page-content content-center" style={{backgroundColor: 'var(--bg)'}}>
-      <div style={{background: 'var(--primary)', color: 'white', padding: '64px', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: '800px', position: 'relative'}}>
+    <div className="page-content content-center" style={{ backgroundColor: 'var(--bg-void)', padding: '48px' }}>
+      <div style={{
+        background: '#FFFFFF', 
+        color: '#000000', 
+        padding: '64px', 
+        borderRadius: 'var(--radius-lg)', 
+        border: '4px solid #000000',
+        boxShadow: '10px 10px 0px #000000', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        width: '100%', 
+        maxWidth: '800px', 
+        position: 'relative'
+      }}>
          
-         <Award size={100} color="var(--success)" style={{marginBottom: '24px', background: 'white', borderRadius: '50%', padding: '16px'}} />
-         <h1 style={{fontSize: '48px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center'}}>{getLangText(lang, 'certificateOfCompletion')}</h1>
-         <p style={{fontSize: '24px', marginBottom: '32px', opacity: 0.9}}>{certData.trade} {getLangText(lang, 'certification')}</p>
+         <div style={{
+           background: 'var(--tertiary)',
+           borderRadius: 'var(--radius-md)',
+           border: '3px solid #000000',
+           padding: '16px',
+           display: 'flex',
+           alignItems: 'center',
+           justifyContent: 'center',
+           marginBottom: '24px',
+           boxShadow: '3px 3px 0px #000000'
+         }}>
+           <Award size={64} color="#FFFFFF" />
+         </div>
          
-         <div style={{background: 'rgba(255,255,255,0.1)', width: '100%', padding: '24px', borderRadius: 'var(--radius-md)', marginBottom: '48px', textAlign: 'left'}}>
-           <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '18px'}}>
-             <div><strong>{getLangText(lang, 'name')}:</strong> {certData.name}</div>
-             <div><strong>{getLangText(lang, 'dateCompleted')}:</strong> {new Date(certData.date_certified).toLocaleDateString()}</div>
-             <div><strong>{getLangText(lang, 'age')}:</strong> {certData.age}</div>
-             <div><strong>{getLangText(lang, 'sex')}:</strong> {certData.gender}</div>
-             <div><strong>{getLangText(lang, 'score')}:</strong> {certData.score}%</div>
-             <div><strong>{getLangText(lang, 'language')}:</strong> {certData.language === 'en' ? 'English' : certData.language === 'hi' ? 'Hindi' : 'Malayalam'}</div>
+         <h1 style={{ fontSize: '42px', fontWeight: '900', marginBottom: '8px', textAlign: 'center', fontFamily: 'Archivo', textTransform: 'uppercase' }}>
+           {getLangText(lang, 'certificateOfCompletion')}
+         </h1>
+         <p style={{ fontSize: '24px', marginBottom: '32px', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase' }}>
+           {certData.trade} {getLangText(lang, 'certification')}
+         </p>
+         
+         <div style={{
+           background: 'var(--bg-void)', 
+           width: '100%', 
+           padding: '24px', 
+           borderRadius: 'var(--radius-md)', 
+           border: '3px solid #000000',
+           boxShadow: '4px 4px 0px #000000',
+           marginBottom: '48px', 
+           textAlign: 'left'
+         }}>
+           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '18px', fontWeight: '800', textTransform: 'uppercase' }}>
+             <div><strong style={{ color: 'var(--text-muted)' }}>{getLangText(lang, 'name')}:</strong> {certData.name}</div>
+             <div><strong style={{ color: 'var(--text-muted)' }}>{getLangText(lang, 'dateCompleted')}:</strong> {new Date(certData.date_certified).toLocaleDateString()}</div>
+             <div><strong style={{ color: 'var(--text-muted)' }}>{getLangText(lang, 'age')}:</strong> {certData.age}</div>
+             <div><strong style={{ color: 'var(--text-muted)' }}>{getLangText(lang, 'sex')}:</strong> {certData.gender}</div>
+             <div><strong style={{ color: 'var(--text-muted)' }}>{getLangText(lang, 'score')}:</strong> {certData.score}%</div>
+             <div><strong style={{ color: 'var(--text-muted)' }}>{getLangText(lang, 'language')}:</strong> {certData.language === 'en' ? 'English' : certData.language === 'hi' ? 'Hindi' : 'Malayalam'}</div>
            </div>
          </div>
          
-         <div style={{background: 'white', padding: '32px', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: 'var(--shadow-sm)'}}>
+         <div style={{
+           background: '#FFFFFF', 
+           padding: '32px', 
+           borderRadius: 'var(--radius-md)', 
+           border: '3px solid #000000',
+           boxShadow: '4px 4px 0px #000000',
+           display: 'flex', 
+           flexDirection: 'column', 
+           alignItems: 'center'
+         }}>
            <QRCodeSVG value={verifyUrl} size={150} />
-           <p style={{color: 'var(--text-muted)', marginTop: '16px', fontSize: '14px'}}>{getLangText(lang, 'scanToVerify')}</p>
-           <p style={{color: 'var(--text-main)', fontWeight: 'bold', marginTop: '8px', letterSpacing: '2px'}}>{certData.id}</p>
+           <p style={{ color: 'var(--text-muted)', marginTop: '16px', fontSize: '14px', fontWeight: '900', textTransform: 'uppercase' }}>{getLangText(lang, 'scanToVerify')}</p>
+           <p style={{ color: '#000000', fontWeight: '900', marginTop: '8px', letterSpacing: '2px' }}>{certData.id}</p>
          </div>
       </div>
     </div>
