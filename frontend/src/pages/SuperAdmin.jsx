@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { UploadCloud, BookOpen, AlertCircle, CheckCircle, Settings } from 'lucide-react';
 
 export default function SuperAdmin() {

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Volume2, Mic, CheckCircle, Shield, Award, Users, 
-  ArrowRight, Globe, Sparkles, Cpu, Briefcase, Zap, Building, BookOpen
+  Volume2, Mic, CheckCircle, Users, 
+  ArrowRight, Sparkles, Cpu, Zap, Building, BookOpen
 } from 'lucide-react';
 import { speakText, stopSpeaking } from '../voiceUtils';
 

@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, Delete, ArrowRight, User, Building } from 'lucide-react';
-import { speakText } from '../voiceUtils';
 import { LOCATION_DATA, STATES } from '../locationData';
 
 export default function Login() {

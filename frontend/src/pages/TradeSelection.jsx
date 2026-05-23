@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wrench, Zap, Droplet, PenTool, Factory } from 'lucide-react';
 import { speakText } from '../voiceUtils';

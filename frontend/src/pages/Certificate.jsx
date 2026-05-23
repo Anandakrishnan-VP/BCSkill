@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { Award } from 'lucide-react';
@@ -6,7 +6,6 @@ import { speakText } from '../voiceUtils';
 import { getLangText } from '../translations';
 
 export default function Certificate() {
-  const [speaking, setSpeaking] = useState(false);
   const [certData, setCertData] = useState(null);
   const [loading, setLoading] = useState(true);
   const certId = localStorage.getItem('cert_id');
@@ -16,8 +15,7 @@ export default function Certificate() {
   const verifyUrl = `http://localhost:5173/verify/${certId}`;
 
   const handleSpeak = () => {
-    setSpeaking(true);
-    speakText("Congratulations! You have passed the assessment. Here is your certificate.", 'en-US', () => setSpeaking(false));
+    speakText("Congratulations! You have passed the assessment. Here is your certificate.", 'en-US');
   };
 
   useEffect(() => {

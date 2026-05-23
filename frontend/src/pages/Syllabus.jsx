@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Circle, Play, ChevronDown, ChevronUp } from 'lucide-react';
 import { getLangText } from '../translations';
@@ -10,17 +10,22 @@ export default function Syllabus() {
   const uid = localStorage.getItem('user_id') || 1;
   const lang = localStorage.getItem('preferred_language') || 'en';
 
-  useEffect(() => {
-    fetchModules();
-  }, []);
-
-  const fetchModules = async () => {
-    const res = await fetch(`http://localhost:8000/worker/dashboard/${uid}?t=${Date.now()}`);
-    const d = await res.json();
-    if (d.status === 'success') {
-      setModules(d.modules);
-    }
+  const getModulesData = async (userId) => {
+    const res = await fetch(`http://localhost:8000/worker/dashboard/${userId}?t=${Date.now()}`);
+    return await res.json();
   };
+
+  useEffect(() => {
+    let active = true;
+    getModulesData(uid)
+      .then(d => {
+        if (active && d.status === 'success') {
+          setModules(d.modules);
+        }
+      })
+      .catch(console.error);
+    return () => { active = false; };
+  }, [uid]);
 
   const markComplete = async (moduleId) => {
     await fetch('http://localhost:8000/modules/complete', {
@@ -28,7 +33,10 @@ export default function Syllabus() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({user_id: parseInt(uid), module_id: moduleId})
     });
-    fetchModules();
+    const d = await getModulesData(uid);
+    if (d.status === 'success') {
+      setModules(d.modules);
+    }
   };
 
   if (!modules.length) return (

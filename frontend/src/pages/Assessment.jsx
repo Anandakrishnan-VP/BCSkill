@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, AlertTriangle } from 'lucide-react';
 import { speakText } from '../voiceUtils';
@@ -19,28 +19,29 @@ export default function Assessment() {
   const domain = localStorage.getItem('trade_domain') || 'Electrician';
 
   useEffect(() => {
-    generateAssessment();
-  }, []);
-
-  const generateAssessment = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('http://localhost:8000/generate_final_assessment', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ user_id: parseInt(uid), domain, language: 'en' })
-      });
-      const data = await res.json();
-      if (data.status === 'success') {
-        setAssessmentData(data.assessment);
-        speakText(data.assessment.title + ". " + data.assessment.questions[0].question, 'en-US');
+    let active = true;
+    const generateAssessment = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch('http://localhost:8000/generate_final_assessment', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ user_id: parseInt(uid), domain, language: 'en' })
+        });
+        const data = await res.json();
+        if (active && data.status === 'success') {
+          setAssessmentData(data.assessment);
+          speakText(data.assessment.title + ". " + data.assessment.questions[0].question, 'en-US');
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (active) setLoading(false);
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    generateAssessment();
+    return () => { active = false; };
+  }, [uid, domain]);
 
   const submitAnswer = async () => {
     if (!userAnswer.trim()) return;
@@ -60,7 +61,8 @@ export default function Assessment() {
       const isCorrect = data.evaluation?.is_correct;
       
       handleAnswer(isCorrect, q.topic || 'General Concepts');
-    } catch (e) {
+    } catch (err) {
+      console.error(err);
       handleAnswer(true, q.topic); // default pass on error
     } finally {
       setEvaluating(false);

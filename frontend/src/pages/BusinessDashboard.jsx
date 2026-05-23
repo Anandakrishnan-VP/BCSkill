@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Users, AlertTriangle, CheckCircle, TrendingUp } from 'lucide-react';
 
 export default function BusinessDashboard() {
@@ -14,19 +14,22 @@ export default function BusinessDashboard() {
   const companyId = localStorage.getItem('company_id') || 1;
   const companyName = localStorage.getItem('company_name') || 'Your Company';
 
-  const fetchDashboard = async () => {
-    try {
-      const res = await fetch(`http://localhost:8000/business/dashboard/${companyId}`);
-      const data = await res.json();
-      setEmployees(data.employees);
-      setMetrics(data.metrics);
-    } catch (e) {
-      console.error(e);
-    }
+  const getDashboardData = async (compId) => {
+    const res = await fetch(`http://localhost:8000/business/dashboard/${compId}`);
+    return await res.json();
   };
 
   useEffect(() => {
-    fetchDashboard();
+    let active = true;
+    getDashboardData(companyId)
+      .then(data => {
+        if (active) {
+          setEmployees(data.employees);
+          setMetrics(data.metrics);
+        }
+      })
+      .catch(console.error);
+    return () => { active = false; };
   }, [companyId]);
 
   const handleAddEmployee = async (e) => {
@@ -42,9 +45,11 @@ export default function BusinessDashboard() {
         })
       });
       setNewEmp({name: '', phone: '', employee_id: '', password: '', role: '', trade: '', language: 'en'});
-      fetchDashboard();
-    } catch (e) {
-      console.error(e);
+      const data = await getDashboardData(companyId);
+      setEmployees(data.employees);
+      setMetrics(data.metrics);
+    } catch (err) {
+      console.error(err);
     }
   };
 

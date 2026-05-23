@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BookOpen, User, CheckCircle, Home, X, Award, LogOut } from 'lucide-react';
+import { BookOpen, CheckCircle, Home, X, Award, LogOut } from 'lucide-react';
 import { getLangText } from '../translations';
 
 export default function Sidebar() {

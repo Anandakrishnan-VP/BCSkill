@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { LOCATION_DATA, STATES } from '../locationData';
 
 export default function Admin() {
@@ -8,18 +8,21 @@ export default function Admin() {
   const [districtFilter, setDistrictFilter] = useState('All');
 
   useEffect(() => {
+    let active = true;
+    const fetchWorkers = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/admin/workers?domain=${domainFilter}&state=${stateFilter}&district=${districtFilter}`);
+        const data = await res.json();
+        if (active) {
+          setWorkers(data.workers);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
     fetchWorkers();
+    return () => { active = false; };
   }, [domainFilter, stateFilter, districtFilter]);
-
-  const fetchWorkers = async () => {
-    try {
-      const res = await fetch(`http://localhost:8000/admin/workers?domain=${domainFilter}&state=${stateFilter}&district=${districtFilter}`);
-      const data = await res.json();
-      setWorkers(data.workers);
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   const exportCsv = () => {
     if (workers.length === 0) return;

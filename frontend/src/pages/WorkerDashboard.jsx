@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Flame, CheckCircle, Book, Lock, Award, BookOpen, AlertTriangle } from 'lucide-react';
 import { getLangText } from '../translations';
