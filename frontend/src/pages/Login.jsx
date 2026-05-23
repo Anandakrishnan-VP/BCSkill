@@ -119,12 +119,68 @@ export default function Login() {
 
   return (
     <div className="app-container split-pane" style={{padding: 0, height: '100vh', overflow: 'hidden'}}>
-      <div className="split-left" style={{background: 'var(--primary)', color: 'white', padding: '64px', justifyContent: 'center', alignItems: 'center'}}>
-        <BookOpen size={120} style={{marginBottom: '32px'}} />
-        <h1 style={{fontSize: '64px', fontWeight: 'bold', marginBottom: '16px'}}>SkillVoice</h1>
-        <p style={{fontSize: '24px', opacity: 0.9, textAlign: 'center', maxWidth: '400px', lineHeight: 1.5}}>
-          The Voice-First Upskilling Platform for the Next Billion Users
-        </p>
+      <div className="split-left" style={{
+        background: 'radial-gradient(circle at top left, var(--tertiary), var(--bg-void))',
+        borderRight: '1px solid var(--glass-border)',
+        color: 'white',
+        padding: '64px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative'
+      }}>
+        {/* Glow backdrop */}
+        <div style={{
+          position: 'absolute',
+          width: '300px',
+          height: '300px',
+          background: 'radial-gradient(circle, rgba(0, 242, 255, 0.12) 0%, transparent 70%)',
+          filter: 'blur(40px)',
+          top: '20%',
+          left: '20%',
+          zIndex: 1
+        }}></div>
+
+        <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{
+            background: 'linear-gradient(135deg, var(--primary), var(--secondary))',
+            padding: '24px',
+            borderRadius: 'var(--radius-xl)',
+            boxShadow: '0 0 40px rgba(0, 242, 255, 0.25)',
+            marginBottom: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <BookOpen size={72} color="var(--bg-void)" style={{ strokeWidth: 2.2 }} />
+          </div>
+          
+          <h1 style={{
+            fontFamily: 'Outfit',
+            fontSize: '56px',
+            fontWeight: '800',
+            marginBottom: '16px',
+            letterSpacing: '-1.5px',
+            background: 'linear-gradient(90deg, #ffffff, #c7d2fe)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            textAlign: 'center'
+          }}>
+            SkillVoice <span style={{ color: 'var(--primary)' }}>AI</span>
+          </h1>
+          
+          <p style={{
+            fontSize: '22px',
+            color: 'var(--text-muted)',
+            textAlign: 'center',
+            maxWidth: '440px',
+            lineHeight: 1.6,
+            fontWeight: '500'
+          }}>
+            Empowering trade professionals through low-latency conversational AI and verified career credentials.
+          </p>
+        </div>
       </div>
       
       <div className="split-right content-center" style={{padding: '48px', position: 'relative', overflowY: 'auto'}}>

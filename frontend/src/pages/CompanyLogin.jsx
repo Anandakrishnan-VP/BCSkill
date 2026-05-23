@@ -34,16 +34,74 @@ export default function CompanyLogin() {
   };
 
   return (
-    <div className="app-container" style={{background: 'white'}}>
-      <div className="split-left" style={{background: 'var(--warning)', color: 'white', padding: '64px', justifyContent: 'center', alignItems: 'center'}}>
-        <Building size={120} style={{marginBottom: '32px'}} />
-        <h1 style={{fontSize: '48px', fontWeight: 'bold', marginBottom: '16px', textAlign: 'center'}}>Company Portal</h1>
-        <p style={{fontSize: '24px', opacity: 0.9, textAlign: 'center', maxWidth: '400px'}}>Assess and upskill your workforce to perfection.</p>
+    <div className="app-container split-pane" style={{padding: 0, height: '100vh', overflow: 'hidden', background: 'var(--bg-void)'}}>
+      <div className="split-left" style={{
+        background: 'radial-gradient(circle at top left, var(--secondary), var(--bg-void))',
+        borderRight: '1px solid var(--glass-border)',
+        color: 'white',
+        padding: '64px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative'
+      }}>
+        {/* Glow backdrop */}
+        <div style={{
+          position: 'absolute',
+          width: '300px',
+          height: '300px',
+          background: 'radial-gradient(circle, rgba(176, 38, 255, 0.12) 0%, transparent 70%)',
+          filter: 'blur(40px)',
+          top: '20%',
+          left: '20%',
+          zIndex: 1
+        }}></div>
+
+        <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{
+            background: 'linear-gradient(135deg, var(--secondary), var(--tertiary))',
+            padding: '24px',
+            borderRadius: 'var(--radius-xl)',
+            boxShadow: '0 0 40px rgba(176, 38, 255, 0.25)',
+            marginBottom: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Building size={72} color="white" style={{ strokeWidth: 2 }} />
+          </div>
+          
+          <h1 style={{
+            fontFamily: 'Outfit',
+            fontSize: '56px',
+            fontWeight: '800',
+            marginBottom: '16px',
+            letterSpacing: '-1.5px',
+            background: 'linear-gradient(90deg, #ffffff, #c7d2fe)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            textAlign: 'center'
+          }}>
+            Company Portal
+          </h1>
+          
+          <p style={{
+            fontSize: '22px',
+            color: 'var(--text-muted)',
+            textAlign: 'center',
+            maxWidth: '440px',
+            lineHeight: 1.6,
+            fontWeight: '500'
+          }}>
+            Enterprise-grade staff upskilling, safety verification, and live diagnostics management.
+          </p>
+        </div>
       </div>
       
-      <div className="split-right" style={{padding: '64px', alignItems: 'center', position: 'relative'}}>
+      <div className="split-right content-center" style={{padding: '64px', position: 'relative', overflowY: 'auto'}}>
         <div style={{width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column'}}>
-          <h2 className="title-large" style={{marginBottom: '48px'}}>Business Login</h2>
+          <h2 className="title-large" style={{marginBottom: '48px', fontSize: '36px', textAlign: 'center'}}>Business Login</h2>
           
           <form onSubmit={handleLogin} style={{display: 'flex', flexDirection: 'column', gap: '24px'}}>
             <input 
@@ -51,7 +109,14 @@ export default function CompanyLogin() {
               placeholder="Company Name" 
               value={companyName} 
               onChange={e => setCompanyName(e.target.value)}
-              style={{marginBottom: 0, textAlign: 'left', letterSpacing: 'normal'}}
+              style={{
+                marginBottom: 0, 
+                textAlign: 'left', 
+                letterSpacing: 'normal',
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--glass-border)',
+                color: 'white'
+              }}
             />
             <input 
               type="password"
@@ -59,9 +124,20 @@ export default function CompanyLogin() {
               placeholder="Password" 
               value={password} 
               onChange={e => setPassword(e.target.value)}
-              style={{marginBottom: 0, textAlign: 'left', letterSpacing: 'normal'}}
+              style={{
+                marginBottom: 0, 
+                textAlign: 'left', 
+                letterSpacing: 'normal',
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--glass-border)',
+                color: 'white'
+              }}
             />
-            <button type="submit" className="btn-primary" style={{background: 'var(--warning)', marginTop: '24px'}}>
+            <button type="submit" className="btn-primary" style={{
+              background: 'linear-gradient(135deg, var(--secondary), var(--tertiary))',
+              boxShadow: '0 8px 24px -8px rgba(176, 38, 255, 0.5)',
+              marginTop: '24px'
+            }}>
               Access Dashboard
             </button>
           </form>
