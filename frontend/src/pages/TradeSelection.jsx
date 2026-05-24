@@ -1,9 +1,47 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wrench, Zap, Droplet, PenTool, Factory } from 'lucide-react';
+import { Wrench, Zap, Droplet, PenTool, Factory, BookOpen } from 'lucide-react';
 import { speakText } from '../voiceUtils';
 
 export default function TradeSelection() {
   const navigate = useNavigate();
+  const [trades, setTrades] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const fetchCoursesList = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/courses');
+        const data = await res.json();
+        if (active && data.status === 'success') {
+          const mapped = data.courses.map(name => {
+            let icon = <BookOpen size={40} />;
+            const lowerName = name.toLowerCase();
+            if (lowerName.includes('ac ') || lowerName.includes('air conditioning') || lowerName.includes('hvac')) {
+              icon = <Wrench size={40} />;
+            } else if (lowerName.includes('electr')) {
+              icon = <Zap size={40} />;
+            } else if (lowerName.includes('plumb')) {
+              icon = <Droplet size={40} />;
+            } else if (lowerName.includes('weld')) {
+              icon = <PenTool size={40} />;
+            } else if (lowerName.includes('factory') || lowerName.includes('operator') || lowerName.includes('machin')) {
+              icon = <Factory size={40} />;
+            }
+            return { name, icon };
+          });
+          setTrades(mapped);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    fetchCoursesList();
+    return () => { active = false; };
+  }, []);
 
   const selectTrade = async (tradeName) => {
     localStorage.setItem('preferred_language', 'en');
@@ -22,7 +60,7 @@ export default function TradeSelection() {
         })
       });
     } catch (e) {
-      console.error("Mock syllabus gen failed", e);
+      console.error("Syllabus initial check failed", e);
     }
     
     setTimeout(() => {
@@ -30,13 +68,14 @@ export default function TradeSelection() {
     }, 1000);
   };
 
-  const trades = [
-    { name: 'AC Technician', icon: <Wrench size={40} /> },
-    { name: 'Electrician', icon: <Zap size={40} /> },
-    { name: 'Plumber', icon: <Droplet size={40} /> },
-    { name: 'Welder', icon: <PenTool size={40} /> },
-    { name: 'Factory Operator', icon: <Factory size={40} /> },
-  ];
+  if (loading) return (
+    <div className="app-container content-center animate-fade-in" style={{ minHeight: '100vh', padding: '24px' }}>
+      <div className="loader-container">
+        <div className="neon-spinner" style={{ width: '64px', height: '64px', borderWidth: '6px' }}></div>
+        <p style={{ color: '#000000', fontSize: '24px', fontWeight: '900', marginTop: '24px', textTransform: 'uppercase' }}>Loading Trades...</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="app-container content-center animate-fade-in" style={{ minHeight: '100vh', padding: '24px' }}>

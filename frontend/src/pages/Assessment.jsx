@@ -6,12 +6,14 @@ import { speakText } from '../voiceUtils';
 export default function Assessment() {
   const [assessmentData, setAssessmentData] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
   const [score, setScore] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [evaluating, setEvaluating] = useState(false);
   
   const [userAnswer, setUserAnswer] = useState('');
+  const [selectedOption, setSelectedOption] = useState(null);
   const [failedTopics, setFailedTopics] = useState([]);
   
   const navigate = useNavigate();
@@ -44,35 +46,42 @@ export default function Assessment() {
   }, [uid, domain]);
 
   const submitAnswer = async () => {
-    if (!userAnswer.trim()) return;
-    setEvaluating(true);
     const q = assessmentData.questions[currentQuestion];
-    try {
-      const res = await fetch('http://localhost:8000/evaluate_answer', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          lesson_id: "final",
-          question_id: q.id,
-          user_answer: userAnswer
-        })
-      });
-      const data = await res.json();
-      const isCorrect = data.evaluation?.is_correct;
-      
+    if (q.type === 'mcq') {
+      if (!selectedOption) return;
+      const isCorrect = selectedOption === q.correct_option;
       handleAnswer(isCorrect, q.topic || 'General Concepts');
-    } catch (err) {
-      console.error(err);
-      handleAnswer(true, q.topic); // default pass on error
-    } finally {
-      setEvaluating(false);
-      setUserAnswer('');
+      setSelectedOption(null);
+    } else {
+      if (!userAnswer.trim()) return;
+      setEvaluating(true);
+      try {
+        const res = await fetch('http://localhost:8000/evaluate_answer', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            lesson_id: "final",
+            question_id: q.id,
+            user_answer: userAnswer
+          })
+        });
+        const data = await res.json();
+        const isCorrect = data.evaluation?.is_correct;
+        
+        handleAnswer(isCorrect, q.topic || 'General Concepts');
+      } catch (err) {
+        console.error(err);
+        handleAnswer(true, q.topic); // default pass on error
+      } finally {
+        setEvaluating(false);
+        setUserAnswer('');
+      }
     }
   };
 
   const handleAnswer = (isCorrect, topic) => {
-    const finalScore = score + (isCorrect ? 10 : 0);
-    setScore(finalScore);
+    const nextCorrectCount = correctCount + (isCorrect ? 1 : 0);
+    setCorrectCount(nextCorrectCount);
     
     if (!isCorrect) {
       setFailedTopics(prev => {
@@ -85,6 +94,8 @@ export default function Assessment() {
       setCurrentQuestion(c => c + 1);
       speakText(assessmentData.questions[currentQuestion + 1].question, 'en-US');
     } else {
+      const finalScore = Math.round((nextCorrectCount / assessmentData.questions.length) * 100);
+      setScore(finalScore);
       finishAssessment(finalScore, !isCorrect ? [...failedTopics, topic] : failedTopics);
     }
   };
@@ -212,6 +223,7 @@ export default function Assessment() {
   }
 
   const q = assessmentData?.questions[currentQuestion];
+  const isMCQ = q?.type === 'mcq';
 
   return (
     <div className="main-content-area animate-fade-in" style={{ padding: '48px', minHeight: '100vh', background: 'var(--bg-void)' }}>
@@ -249,7 +261,9 @@ export default function Assessment() {
           marginBottom: '48px',
           boxShadow: 'var(--shadow-main)'
         }}>
-          <div style={{ color: 'var(--tertiary)', fontWeight: '900', marginBottom: '16px', letterSpacing: '1px', textTransform: 'uppercase' }}>AI ASSESSOR</div>
+          <div style={{ color: 'var(--tertiary)', fontWeight: '900', marginBottom: '16px', letterSpacing: '1px', textTransform: 'uppercase' }}>
+            {isMCQ ? "Multiple Choice Question" : "AI ASSESSOR - Descriptive Question"}
+          </div>
           <h2 style={{ fontSize: '32px', lineHeight: '1.4', color: '#000000', fontWeight: '800' }}>{q?.question}</h2>
         </div>
         
@@ -263,31 +277,64 @@ export default function Assessment() {
           alignItems: 'center',
           boxShadow: 'var(--shadow-main)'
         }}>
-           <div style={{ color: '#000000', fontWeight: '900', marginBottom: '32px', letterSpacing: '1px', alignSelf: 'flex-start', textTransform: 'uppercase' }}>YOUR ANSWER</div>
+           <div style={{ color: '#000000', fontWeight: '900', marginBottom: '32px', letterSpacing: '1px', alignSelf: 'flex-start', textTransform: 'uppercase' }}>
+             {isMCQ ? "Select the correct option" : "YOUR ANSWER"}
+           </div>
            
-           <textarea
-             style={{
-               width: '100%', 
-               minHeight: '150px', 
-               background: 'var(--bg-void)', 
-               border: '3px solid #000000',
-               borderRadius: 'var(--radius-md)', 
-               padding: '24px', 
-               color: '#000000', 
-               fontSize: '18px',
-               marginBottom: '32px', 
-               resize: 'vertical',
-               fontWeight: '700',
-               outline: 'none'
-             }}
-             placeholder="Type your answer here..."
-             value={userAnswer}
-             onChange={e => setUserAnswer(e.target.value)}
-           />
+           {isMCQ ? (
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', marginBottom: '32px' }}>
+               {q.options?.map((opt, i) => {
+                 const optLetter = ["A", "B", "C", "D"][i];
+                 const isSelected = selectedOption === optLetter;
+                 return (
+                   <button
+                     key={i}
+                     onClick={() => setSelectedOption(optLetter)}
+                     style={{
+                       width: '100%',
+                       padding: '20px 24px',
+                       fontSize: '18px',
+                       textAlign: 'left',
+                       background: isSelected ? 'var(--primary)' : '#FFFFFF',
+                       border: '3px solid #000000',
+                       borderRadius: 'var(--radius-md)',
+                       fontWeight: '800',
+                       cursor: 'pointer',
+                       boxShadow: isSelected ? 'var(--shadow-lg)' : '3px 3px 0px #000000',
+                       transform: isSelected ? 'translate(-2px, -2px)' : 'none',
+                       transition: 'all 0.15s ease'
+                     }}
+                   >
+                     {opt}
+                   </button>
+                 );
+               })}
+             </div>
+           ) : (
+             <textarea
+               style={{
+                 width: '100%', 
+                 minHeight: '150px', 
+                 background: 'var(--bg-void)', 
+                 border: '3px solid #000000',
+                 borderRadius: 'var(--radius-md)', 
+                 padding: '24px', 
+                 color: '#000000', 
+                 fontSize: '18px',
+                 marginBottom: '32px', 
+                 resize: 'vertical',
+                 fontWeight: '700',
+                 outline: 'none'
+               }}
+               placeholder="Type your answer here..."
+               value={userAnswer}
+               onChange={e => setUserAnswer(e.target.value)}
+             />
+           )}
            
            <button 
              onClick={submitAnswer} 
-             disabled={!userAnswer.trim()} 
+             disabled={isMCQ ? !selectedOption : !userAnswer.trim()} 
              className="btn-primary" 
              style={{
                width: '100%', 
@@ -295,10 +342,10 @@ export default function Assessment() {
                fontSize: '20px', 
                height: '64px',
                fontWeight: '900',
-               background: userAnswer.trim() ? 'var(--primary)' : '#E5E7EB',
-               borderColor: userAnswer.trim() ? '#000000' : '#9CA3AF',
-               boxShadow: userAnswer.trim() ? 'var(--shadow-main)' : 'none',
-               cursor: userAnswer.trim() ? 'pointer' : 'not-allowed'
+               background: (isMCQ ? selectedOption : userAnswer.trim()) ? 'var(--primary)' : '#E5E7EB',
+               borderColor: (isMCQ ? selectedOption : userAnswer.trim()) ? '#000000' : '#9CA3AF',
+               boxShadow: (isMCQ ? selectedOption : userAnswer.trim()) ? 'var(--shadow-main)' : 'none',
+               cursor: (isMCQ ? selectedOption : userAnswer.trim()) ? 'pointer' : 'not-allowed'
              }}
            >
              Submit Answer

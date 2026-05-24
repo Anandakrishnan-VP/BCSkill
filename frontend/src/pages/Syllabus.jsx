@@ -75,7 +75,7 @@ export default function Syllabus() {
             const isLocked = index > 0 && !modules[index - 1].is_completed;
             const isExpanded = expandedModule === m.id;
             
-            const topics = [
+            const topics = m.topics || [
               "Core Concepts & Terminology",
               "Safety Guidelines & Best Practices",
               "Standard Operating Procedures",
@@ -97,7 +97,7 @@ export default function Syllabus() {
                 transition: 'all 0.15s ease'
               }}>
                 <div 
-                  style={{
+                   style={{
                     display: 'flex', 
                     alignItems: 'center', 
                     gap: '24px', 
@@ -157,19 +157,6 @@ export default function Syllabus() {
                           }}
                         >
                           <Play size={20} /> {getLangText(lang, 'startTrainingSession')}
-                        </button>
-                      )}
-                      
-                      {!isCompleted && (
-                        <button 
-                          className="btn-secondary" 
-                          style={{ padding: '0 24px', height: '52px', width: 'auto' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            markComplete(m.module_id);
-                          }}
-                        >
-                          {getLangText(lang, 'markCompleteManually')}
                         </button>
                       )}
                       

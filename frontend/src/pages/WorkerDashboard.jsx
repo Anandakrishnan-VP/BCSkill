@@ -248,7 +248,7 @@ export default function WorkerDashboard() {
           {/* Assessment Action Card */}
           <div style={{
             flex: 1, 
-            cursor: allCompleted ? 'pointer' : 'not-allowed', 
+            cursor: (data.has_certificate || allCompleted) ? 'pointer' : 'not-allowed', 
             border: '3px solid #000000',
             background: '#FFFFFF', 
             borderRadius: 'var(--radius-md)', 
@@ -264,7 +264,7 @@ export default function WorkerDashboard() {
             }
           }}
           onMouseOver={e => { 
-            if (allCompleted) {
+            if (data.has_certificate || allCompleted) {
               e.currentTarget.style.transform = 'translate(-3px, -3px)';
               e.currentTarget.style.boxShadow = 'var(--shadow-lg)';
               e.currentTarget.style.background = 'var(--success)';

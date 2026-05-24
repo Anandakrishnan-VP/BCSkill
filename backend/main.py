@@ -2,8 +2,11 @@ import os
 import json
 import base64
 import re
+import shutil
+import sys
+import subprocess
 from typing import Dict, List, Optional
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Form, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from database import supabase
@@ -224,28 +227,79 @@ def worker_dashboard(user_id: int):
     total = len(mods)
     
     certs = supabase.table('certificates').select('*').eq('user_id', user_id).execute()
+    valid_certs = [c for c in certs.data if c['id'].startswith('CERT-')]
+    has_certificate = len(valid_certs) > 0
+    
+    # Attach topics to modules if available
+    module_ids = [m['module_id'] for m in mods]
+    db_module_ids = []
+    for mid in module_ids:
+        try:
+            db_module_ids.append(int(mid))
+        except ValueError:
+            if len(mid) == 36 and '-' in mid:
+                db_module_ids.append(mid)
+                
+    topics_map = {}
+    if db_module_ids:
+        try:
+            topics_res = supabase.table('course_knowledge_base').select('module_id, chunk_text').in_('module_id', db_module_ids).like('chunk_text', '__TOPICS__:%').execute().data
+            for r in topics_res:
+                try:
+                    topics_data = json.loads(r['chunk_text'][len("__TOPICS__:"):])
+                    topics_map[str(r['module_id'])] = topics_data
+                except Exception as e:
+                    print("Error parsing topics:", e)
+        except Exception as e:
+            print("Error querying topics:", e)
+            
+    for m in mods:
+        m['topics'] = topics_map.get(str(m['module_id']), None)
     
     return {
         "status": "success",
         "streak_days": user["streak_days"] or 0,
         "modules_completed": completed,
         "modules_total": total,
-        "has_certificate": len(certs.data) > 0,
+        "has_certificate": has_certificate,
         "modules": mods
     }
 
 @app.post("/modules/mock")
 def generate_mock_modules(data: TradeSelection):
-    mods = [
-        {"user_id": data.user_id, "module_id": "m1", "title": f"Intro to {data.domain}", "is_completed": False},
-        {"user_id": data.user_id, "module_id": "m2", "title": "Safety Protocols", "is_completed": False},
-        {"user_id": data.user_id, "module_id": "m3", "title": "Basic Diagnostics", "is_completed": False},
-        {"user_id": data.user_id, "module_id": "m4", "title": "Advanced Repair", "is_completed": False},
-        {"user_id": data.user_id, "module_id": "m5", "title": "Final Review & Checklist", "is_completed": False}
-    ]
-    supabase.table('course_modules').delete().eq('user_id', data.user_id).execute()
-    supabase.table('course_modules').insert(mods).execute()
-    return {"status": "success"}
+    try:
+        # Check if the domain has a custom course in the database
+        course_res = supabase.table('edtech_courses').select('id').eq('trade_domain', data.domain).execute().data
+        if course_res:
+            course_id = course_res[0]['id']
+            mod_res = supabase.table('edtech_modules').select('id, title').eq('course_id', course_id).order('module_number').execute().data
+            if mod_res:
+                mods = []
+                for m in mod_res:
+                    mods.append({
+                        "user_id": data.user_id,
+                        "module_id": str(m["id"]),
+                        "title": m["title"],
+                        "is_completed": False
+                    })
+                supabase.table('course_modules').delete().eq('user_id', data.user_id).execute()
+                supabase.table('course_modules').insert(mods).execute()
+                return {"status": "success"}
+                
+        # Fall back to default mock modules
+        mods = [
+            {"user_id": data.user_id, "module_id": "m1", "title": f"Intro to {data.domain}", "is_completed": False},
+            {"user_id": data.user_id, "module_id": "m2", "title": "Safety Protocols", "is_completed": False},
+            {"user_id": data.user_id, "module_id": "m3", "title": "Basic Diagnostics", "is_completed": False},
+            {"user_id": data.user_id, "module_id": "m4", "title": "Advanced Repair", "is_completed": False},
+            {"user_id": data.user_id, "module_id": "m5", "title": "Final Review & Checklist", "is_completed": False}
+        ]
+        supabase.table('course_modules').delete().eq('user_id', data.user_id).execute()
+        supabase.table('course_modules').insert(mods).execute()
+        return {"status": "success"}
+    except Exception as e:
+        print("Error setting course modules:", e)
+        return {"status": "error", "message": str(e)}
 
 @app.post("/modules/complete")
 def complete_module(data: ModuleComplete):
@@ -257,6 +311,56 @@ def complete_module(data: ModuleComplete):
 @app.post("/generate_lesson")
 def generate_lesson(data: TradeSelection):
     try:
+        db_module_id = None
+        try:
+            db_module_id = int(data.module_id)
+        except:
+            if data.module_id and len(data.module_id) == 36 and '-' in data.module_id:
+                db_module_id = data.module_id
+                
+        if db_module_id is not None:
+            chunks_res = supabase.table('course_knowledge_base').select('chunk_text').eq('module_id', db_module_id).execute().data
+            if chunks_res:
+                standard_chunks = []
+                topics = []
+                practice_question = None
+                
+                for r in chunks_res:
+                    text = r['chunk_text']
+                    if text.startswith('__TOPICS__:'):
+                        try:
+                            topics = json.loads(text[len('__TOPICS__:'):])
+                        except:
+                            pass
+                    elif text.startswith('__PRACTICE_QUESTION__:'):
+                        try:
+                            practice_question = json.loads(text[len('__PRACTICE_QUESTION__:'):])
+                        except:
+                            pass
+                    elif not text.startswith('__'):
+                        standard_chunks.append(text)
+                
+                if standard_chunks:
+                    mod_info = supabase.table('edtech_modules').select('title').eq('id', db_module_id).execute().data
+                    title = mod_info[0]['title'] if mod_info else "Module Details"
+                    
+                    if not practice_question:
+                        practice_question = {
+                            "id": "q1",
+                            "text": f"What is the main practice taught in the module: {title}?",
+                            "expected_answer": "Standard safety rules and concepts."
+                        }
+                        
+                    return {
+                        "status": "success",
+                        "lesson": {
+                            "title": title,
+                            "overview": f"This module covers: {', '.join(topics)}.",
+                            "chunks": standard_chunks,
+                            "question": practice_question
+                        }
+                    }
+
         course_res = supabase.table('edtech_courses').select('id').eq('trade_domain', data.domain).execute().data
         if not course_res: raise Exception("Course not found")
         course_id = course_res[0]['id']
@@ -289,6 +393,33 @@ def generate_lesson(data: TradeSelection):
 def generate_final_assessment(data: TradeSelection):
     try:
         course_res = supabase.table('edtech_courses').select('id').eq('trade_domain', data.domain).execute().data
+        if course_res:
+            course_id = course_res[0]['id']
+            mod_res = supabase.table('edtech_modules').select('id').eq('course_id', course_id).execute().data
+            mod_ids = [m['id'] for m in mod_res] if mod_res else []
+            if mod_ids:
+                res = supabase.table('course_knowledge_base').select('chunk_text').in_('module_id', mod_ids).like('chunk_text', '__ASSESSMENT__:%').execute().data
+                if res:
+                    assessment_text = res[0]['chunk_text'][len('__ASSESSMENT__:'):]
+                    assessment_json = json.loads(assessment_text)
+                    
+                    questions = []
+                    for q in assessment_json.get("mcqs", []):
+                        q["type"] = "mcq"
+                        questions.append(q)
+                    for q in assessment_json.get("descriptive", []):
+                        q["type"] = "descriptive"
+                        questions.append(q)
+                        
+                    return {
+                        "status": "success",
+                        "assessment": {
+                            "title": f"Final Exam: {data.domain}",
+                            "questions": questions
+                        }
+                    }
+
+        course_res = supabase.table('edtech_courses').select('id').eq('trade_domain', data.domain).execute().data
         if not course_res: raise Exception("Course not found")
         course_id = course_res[0]['id']
         mod_res = supabase.table('edtech_modules').select('id').eq('course_id', course_id).execute().data
@@ -319,11 +450,41 @@ def generate_final_assessment(data: TradeSelection):
 
 @app.post("/evaluate_answer")
 def evaluate_answer(data: AnswerSubmission):
-    prompt = f"""
-    Evaluate the following spoken answer from a trainee.
-    User's answer: "{data.user_answer}"
-    Return strict JSON: {{"is_correct": true/false, "feedback": "Short encouraging feedback"}}
-    """
+    question_text = ""
+    expected_answer = ""
+    try:
+        res = supabase.table('course_knowledge_base').select('chunk_text').like('chunk_text', '__ASSESSMENT__:%').execute()
+        for r in res.data:
+            raw = r['chunk_text'].replace('__ASSESSMENT__:', '', 1)
+            blocks = json.loads(raw)
+            for q in blocks.get('mcqs', []):
+                if q.get('id') == data.question_id:
+                    question_text = q.get('question')
+                    expected_answer = q.get('correct_option')
+            for q in blocks.get('descriptive', []):
+                if q.get('id') == data.question_id:
+                    question_text = q.get('question')
+                    expected_answer = q.get('expected_answer')
+    except Exception as db_err:
+        print("DB search error in evaluate_answer:", db_err)
+
+    if question_text and expected_answer:
+        prompt = f"""
+        Evaluate the trainee's answer for the following question.
+        Question: "{question_text}"
+        Expected/Ideal answer: "{expected_answer}"
+        Trainee's answer: "{data.user_answer}"
+        
+        Compare the trainee's answer to the expected answer. If it captures the core meaning, key points, or intent of the expected answer, grade it as correct (is_correct: true).
+        Return strict JSON: {{"is_correct": true/false, "feedback": "Short encouraging feedback"}}
+        """
+    else:
+        prompt = f"""
+        Evaluate the following answer from a trainee.
+        User's answer: "{data.user_answer}"
+        Return strict JSON: {{"is_correct": true/false, "feedback": "Short encouraging feedback"}}
+        """
+        
     try:
         chat_completion = groq_client.chat.completions.create(messages=[{"role": "user", "content": prompt}], model=GROQ_MODEL)
         text = chat_completion.choices[0].message.content.strip()
@@ -470,6 +631,225 @@ def generate_remedial_modules(data: RemedialRequest):
     except Exception as e:
         print(e)
         return {"status": "error"}
+
+@app.get("/courses")
+def get_courses():
+    try:
+        res = supabase.table('edtech_courses').select('trade_domain').execute()
+        # Default mock courses if table is empty
+        courses = [c['trade_domain'] for c in res.data]
+        if not courses:
+            courses = ["AC Technician", "Electrician", "Plumber", "Welder", "Factory Operator"]
+        return {"status": "success", "courses": courses}
+    except Exception as e:
+        print("Error fetching courses:", e)
+        return {"status": "error", "courses": ["AC Technician", "Electrician", "Plumber", "Welder", "Factory Operator"]}
+
+from fastembed import TextEmbedding
+embedding_model = None
+
+def get_embedding(text: str) -> List[float]:
+    global embedding_model
+    if embedding_model is None:
+        print("Loading AI Embedding Model in main.py...")
+        embedding_model = TextEmbedding()
+    vectors = list(embedding_model.embed([text]))
+    return vectors[0].tolist()
+
+def extract_text_from_pdf(pdf_path: str) -> str:
+    # 1. Try standard pypdf
+    from pypdf import PdfReader
+    text = ""
+    try:
+        reader = PdfReader(pdf_path)
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
+    except Exception as e:
+        print("Standard pypdf extraction failed:", e)
+    
+    # 2. OCR fallback
+    if len(text.strip()) < 100:
+        print("Extracted text is empty or too short. Attempting OCR fallback...")
+        try:
+            # Install easyocr dynamically if missing
+            try:
+                import easyocr
+            except ImportError:
+                print("Installing easyocr for OCR fallback...")
+                import subprocess
+                import sys
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "easyocr"])
+                import easyocr
+            
+            reader = PdfReader(pdf_path)
+            ocr_text = ""
+            import tempfile
+            
+            ocr_reader = easyocr.Reader(['en'])
+            for page_num, page in enumerate(reader.pages):
+                print(f"Checking images on page {page_num + 1}...")
+                for img_idx, image_file_object in enumerate(page.images):
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+                        f.write(image_file_object.data)
+                        temp_path = f.name
+                    
+                    print(f"OCR reading image {img_idx+1} from page {page_num+1}...")
+                    results = ocr_reader.readtext(temp_path, detail=0)
+                    ocr_text += " ".join(results) + "\n"
+                    
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+            if len(ocr_text.strip()) > len(text.strip()):
+                text = ocr_text
+        except Exception as e:
+            print("OCR fallback failed:", e)
+            
+    return text
+
+@app.post("/admin/upload_course")
+def upload_course(trade_domain: str = Form(...), file: UploadFile = File(...)):
+    import tempfile
+    
+    # Save the file temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+        shutil.copyfileobj(file.file, temp_file)
+        temp_path = temp_file.name
+        
+    try:
+        # Extract text from the PDF
+        pdf_text = extract_text_from_pdf(temp_path)
+        if len(pdf_text.strip()) < 100:
+            raise HTTPException(status_code=400, detail="Could not extract enough text from the PDF. Please upload a readable PDF.")
+            
+        # Truncate text to fit context if very long
+        pdf_text_truncated = pdf_text[:80000]
+        
+        prompt = f"""
+        You are an expert vocational education curriculum designer. 
+        Analyze the following text from a training manual and generate a complete structured course syllabus, training content, and exam questions.
+        
+        The course name (Trade Domain) is: "{trade_domain}"
+        
+        Your output must be a single, valid JSON object containing:
+        1. "description": A high-level description of the course based on the manual.
+        2. "modules": An array of modules. Determine the number of modules dynamically based on the PDF content structure. Each module should contain:
+           - "module_number": Integer (1, 2, 3, etc.)
+           - "title": Title of the module.
+           - "topics": A list of 3-5 core topics covered in this module.
+           - "content_chunks": A list of 3-5 detailed paragraphs/lessons (each 100-200 words) teaching the topics in sequence.
+           - "question": A dict representing a simple practice question at the end of training for this module:
+              - "id": String (e.g., "q_mod_1")
+              - "text": The practice question.
+              - "expected_answer": The expected answer.
+        3. "assessment": A dict containing the final exam questions:
+           - "mcqs": A list of multiple choice questions (generate 1-2 per module). Each MCQ must contain:
+              - "id": String (e.g. "mcq1")
+              - "question": Question text.
+              - "options": A list of 4 options (e.g. ["A) ...", "B) ...", "C) ...", "D) ..."])
+              - "correct_option": The correct option (either "A", "B", "C", or "D")
+           - "descriptive": A list of descriptive questions (generate 1 per module). Each must contain:
+              - "id": String (e.g. "desc1")
+              - "question": Question text.
+              - "expected_answer": Detailed guideline/expected answer for grading.
+        
+        Return ONLY the strict JSON object, with no markdown code blocks, no backticks, and no extra text.
+        
+        Manual Text:
+        "{pdf_text_truncated}"
+        """
+        
+        chat_completion = groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}], 
+            model=GROQ_MODEL,
+            response_format={"type": "json_object"}
+        )
+        
+        response_content = chat_completion.choices[0].message.content.strip()
+        course_data = json.loads(response_content)
+        
+        # Clean up any existing course of the same name to prevent duplicates
+        old_course = supabase.table('edtech_courses').select('id').eq('trade_domain', trade_domain).execute().data
+        if old_course:
+            course_id_to_del = old_course[0]['id']
+            old_modules = supabase.table('edtech_modules').select('id').eq('course_id', course_id_to_del).execute().data
+            mod_ids_to_del = [m['id'] for m in old_modules]
+            if mod_ids_to_del:
+                supabase.table('course_knowledge_base').delete().in_('module_id', mod_ids_to_del).execute()
+                supabase.table('edtech_modules').delete().eq('course_id', course_id_to_del).execute()
+            supabase.table('edtech_courses').delete().eq('id', course_id_to_del).execute()
+            
+        # Insert new course
+        c_res = supabase.table('edtech_courses').insert({
+            "trade_domain": trade_domain,
+            "description": course_data.get("description", f"Course on {trade_domain}")
+        }).execute()
+        course_id = c_res.data[0]['id']
+        
+        # Loop through modules and insert them
+        modules_list = course_data.get("modules", [])
+        for m in modules_list:
+            m_res = supabase.table('edtech_modules').insert({
+                "course_id": course_id,
+                "module_number": m["module_number"],
+                "title": m["title"]
+            }).execute()
+            module_id = m_res.data[0]['id']
+            
+            # Save topics metadata
+            topics_text = "__TOPICS__:" + json.dumps(m.get("topics", []))
+            supabase.table('course_knowledge_base').insert({
+                "module_id": module_id,
+                "chunk_text": topics_text,
+                "embedding": get_embedding(topics_text)
+            }).execute()
+            
+            # Save practice question metadata
+            practice_q = m.get("question", {
+                "id": "q1",
+                "text": f"What is the main practice taught in the module: {m['title']}?",
+                "expected_answer": "Standard safety rules and concepts."
+            })
+            pq_text = "__PRACTICE_QUESTION__:" + json.dumps(practice_q)
+            supabase.table('course_knowledge_base').insert({
+                "module_id": module_id,
+                "chunk_text": pq_text,
+                "embedding": get_embedding(pq_text)
+            }).execute()
+            
+            # Save lesson content chunks
+            for chunk in m.get("content_chunks", []):
+                supabase.table('course_knowledge_base').insert({
+                    "module_id": module_id,
+                    "chunk_text": chunk,
+                    "embedding": get_embedding(chunk)
+                }).execute()
+                
+        # Save assessment metadata under the first module
+        if modules_list:
+            first_module_res = supabase.table('edtech_modules').select('id').eq('course_id', course_id).eq('module_number', 1).execute().data
+            if first_module_res:
+                first_module_id = first_module_res[0]['id']
+                assessment_text = "__ASSESSMENT__:" + json.dumps(course_data.get("assessment", {}))
+                supabase.table('course_knowledge_base').insert({
+                    "module_id": first_module_id,
+                    "chunk_text": assessment_text,
+                    "embedding": get_embedding(assessment_text)
+                }).execute()
+                
+        return {"status": "success", "message": f"Successfully generated course '{trade_domain}' with {len(modules_list)} modules."}
+        
+    except Exception as e:
+        print("Error uploading course:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            os.unlink(temp_path)
+        except:
+            pass
 
 if __name__ == "__main__":
     import uvicorn
